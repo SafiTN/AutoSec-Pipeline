@@ -61,7 +61,7 @@ class NewsFetcher:
         self.max_results: int = nvd_cfg.get("max_results", 10)
         self.default_limit: int = nvd_cfg.get("default_limit", 3)
 
-    def _extract_cvss_info(self, cve_item: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_cvss_info(self, cve_item: Dict[str, Any]) -> Dict[str, Optional[float]]:
         metrics = cve_item.get("metrics", {})
         for key in ("cvssMetricV40", "cvssMetricV31", "cvssMetricV30"):
             entries = metrics.get(key)
@@ -70,7 +70,9 @@ class NewsFetcher:
                 score = cvss_data.get("baseScore", 0.0)
                 severity = cvss_data.get("baseSeverity") or entries[0].get("baseSeverity") or "UNKNOWN"
                 return {"cvss_score": score, "severity": str(severity).upper()}
-        return {"cvss_score": 0.0, "severity": "UNKNOWN"}
+        # No CVSS metric block found at all: use an explicit None sentinel
+        # (never 0.0, which would be ambiguous with a genuine zero score).
+        return {"cvss_score": None, "severity": "UNKNOWN"}
 
     def _parse_nvd_response(self, raw_json: str, limit: int) -> List[Dict[str, Any]]:
         data = json.loads(raw_json)

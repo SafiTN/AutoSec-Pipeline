@@ -264,7 +264,7 @@ def test_advisory_without_cvss_defaults_gracefully(monkeypatch):
     result = fetcher.fetch_latest_cves(limit=3)
 
     assert len(result) == 1
-    assert result[0]["cvss_score"] == 0.0
+    assert result[0]["cvss_score"] is None
     assert result[0]["severity"] == "UNKNOWN"
     assert result[0]["is_sample"] is False
 
