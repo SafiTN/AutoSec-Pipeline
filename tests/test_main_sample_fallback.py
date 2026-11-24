@@ -154,17 +154,6 @@ def test_run_pipeline_manifest_is_sample_false_for_real_advisory(monkeypatch, tm
     assert not manifest["episode_script"]["episode_title"].startswith("[SAMPLE]")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "BUG (see QA report for T04): main.py computes a '[SAMPLE] '-prefixed title in a "
-        "local variable (run_pipeline, around the 'episode_title = episode_script.get(...)' "
-        "block) but never writes it back into episode_script before building the manifest, "
-        "so manifest['episode_script']['episode_title'] is never prefixed even when "
-        "is_sample is True. This violates backlog T04 AC #5, which requires the prefixed "
-        "title to also be 'written to the manifest'. Remove this xfail once main.py is fixed."
-    ),
-)
 def test_run_pipeline_manifest_episode_title_is_prefixed_for_sample_per_ac(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(main, "NewsFetcher", _StubFetcherSample)

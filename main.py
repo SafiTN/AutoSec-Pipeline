@@ -159,6 +159,7 @@ def run_pipeline(
     episode_title = episode_script.get("episode_title", "AutoSec Episode")
     if is_sample:
         episode_title = f"[SAMPLE] {episode_title}"
+        episode_script["episode_title"] = episode_title
 
     logger.info("[Main] Step 4/4: Generating video via CyberMediaGenerator...")
     os.makedirs("output", exist_ok=True)
