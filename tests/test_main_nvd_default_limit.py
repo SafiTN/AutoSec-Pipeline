@@ -1,7 +1,9 @@
 """
-Test for T02 AC e: main.run_pipeline(cve_limit=None) must forward
-nvd.default_limit (read from settings) to NewsFetcher.fetch_latest_cves as
-the `limit=` kwarg, instead of hard-coding 3.
+Test for T05 (supersedes T02 AC e): main.run_pipeline(cve_limit=None) must
+forward nvd.max_results (read from settings) to NewsFetcher.fetch_latest_cves
+as the `limit=` kwarg, instead of nvd.default_limit. Per ADR
+docs/adr/0001-covered-cves-state-file.md, repeat-avoidance needs a real
+candidate pool to pick a non-repeated advisory from, not just a handful.
 
 Fully offline: load_settings, NewsFetcher, ScriptWriter and CyberMediaGenerator
 are all replaced with stubs/mocks so no real config file, NVD, Ollama or
@@ -38,15 +40,24 @@ class _StubMediaGenerator:
         return "/fake/output/episode.mp4"
 
 
-def _fake_settings(default_limit: int):
-    return {"nvd": {"default_limit": default_limit, "allow_fallback": False}}
+def _fake_settings(default_limit: int = 3, max_results: int = 10):
+    return {
+        "nvd": {"default_limit": default_limit, "max_results": max_results, "allow_fallback": False},
+        "paths": {"output_dir": "output", "covered_cves_filename": "covered_cves.json"},
+    }
 
 
-def test_run_pipeline_uses_nvd_default_limit_when_cve_limit_is_none(monkeypatch, tmp_path):
+def test_run_pipeline_uses_nvd_max_results_when_cve_limit_is_none(monkeypatch, tmp_path):
+    """T05 supersedes T02: cve_limit=None now sources the pool size from
+    nvd.max_results (a bigger candidate pool for repeat-avoidance), not
+    nvd.default_limit."""
     monkeypatch.chdir(tmp_path)
 
-    custom_default_limit = 7
-    monkeypatch.setattr(main, "load_settings", lambda: _fake_settings(custom_default_limit))
+    custom_default_limit = 3
+    custom_max_results = 7
+    monkeypatch.setattr(
+        main, "load_settings", lambda: _fake_settings(custom_default_limit, custom_max_results)
+    )
 
     mock_fetcher_instance = MagicMock()
     mock_fetcher_instance.fetch_latest_cves.return_value = [dict(FALLBACK_ADVISORIES[0])]
@@ -57,14 +68,14 @@ def test_run_pipeline_uses_nvd_default_limit_when_cve_limit_is_none(monkeypatch,
 
     main.run_pipeline(run_harness=False, cve_limit=None, max_scenes=1)
 
-    mock_fetcher_instance.fetch_latest_cves.assert_called_with(limit=custom_default_limit)
+    mock_fetcher_instance.fetch_latest_cves.assert_called_with(limit=custom_max_results)
 
 
 def test_run_pipeline_explicit_cve_limit_overrides_nvd_default_limit(monkeypatch, tmp_path):
-    """An explicit cve_limit must win over nvd.default_limit (not be ignored)."""
+    """An explicit cve_limit must win over nvd.max_results (not be ignored)."""
     monkeypatch.chdir(tmp_path)
 
-    monkeypatch.setattr(main, "load_settings", lambda: _fake_settings(default_limit=9))
+    monkeypatch.setattr(main, "load_settings", lambda: _fake_settings(default_limit=9, max_results=9))
 
     mock_fetcher_instance = MagicMock()
     mock_fetcher_instance.fetch_latest_cves.return_value = [dict(FALLBACK_ADVISORIES[0])]

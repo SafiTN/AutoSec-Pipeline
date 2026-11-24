@@ -22,6 +22,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "media_dir": "output_media",
         "default_video_filename": "cyber_episode.mp4",
         "manifest_filename": "last_episode_manifest.json",
+        "covered_cves_filename": "covered_cves.json",
     },
     "ollama": {
         "base_url": "http://localhost:11434",
