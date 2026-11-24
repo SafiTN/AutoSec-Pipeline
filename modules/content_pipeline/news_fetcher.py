@@ -14,6 +14,11 @@ logger = logging.getLogger("AutoSec.NewsFetcher")
 
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
+
+class NvdFetchError(RuntimeError):
+    """يُرفع عند فشل جلب بيانات NVD بعد استنفاد كل المحاولات ودون السماح بالبيانات الاحتياطية."""
+
+
 FALLBACK_ADVISORIES: List[Dict[str, Any]] = [
     {
         "cve_id": "CVE-2025-29927-SAMPLE",
@@ -25,6 +30,7 @@ FALLBACK_ADVISORIES: List[Dict[str, Any]] = [
             "to bypass internal security checks if external headers are not stripped at the edge."
         ),
         "reference_url": "https://nvd.nist.gov/",
+        "is_sample": True,
     },
     {
         "cve_id": "CVE-2025-24813-SAMPLE",
@@ -36,6 +42,7 @@ FALLBACK_ADVISORIES: List[Dict[str, Any]] = [
             "configuration can expose sensitive files or allow remote code execution."
         ),
         "reference_url": "https://nvd.nist.gov/",
+        "is_sample": True,
     },
 ]
 
@@ -45,10 +52,11 @@ class NewsFetcher:
 
     def __init__(self, settings: Optional[Dict[str, Any]] = None):
         self.settings = settings or {}
-        news_cfg = self.settings.get("news_fetcher", {})
-        self.api_url: str = news_cfg.get("api_url", NVD_API_URL)
-        self.timeout_sec: int = news_cfg.get("timeout_sec", 12)
-        self.max_retries: int = news_cfg.get("max_retries", 2)
+        nvd_cfg = self.settings.get("nvd", {})
+        self.api_url: str = nvd_cfg.get("api_url", NVD_API_URL)
+        self.timeout_sec: int = nvd_cfg.get("timeout_sec", 12)
+        self.max_retries: int = nvd_cfg.get("max_retries", 2)
+        self.allow_fallback: bool = nvd_cfg.get("allow_fallback", False)
 
     def _extract_cvss_info(self, cve_item: Dict[str, Any]) -> Dict[str, Any]:
         metrics = cve_item.get("metrics", {})
@@ -92,6 +100,7 @@ class NewsFetcher:
                     "cvss_score": cvss_info["cvss_score"],
                     "summary": summary,
                     "reference_url": ref_url,
+                    "is_sample": False,
                 }
             )
         return advisories
@@ -108,6 +117,7 @@ class NewsFetcher:
         }
         url = f"{self.api_url}?{urlencode(params)}"
 
+        last_error: Optional[BaseException] = None
         for attempt in range(1, self.max_retries + 1):
             try:
                 logger.info("[NewsFetcher] Fetching CVEs (attempt %d/%d) from NVD...", attempt, self.max_retries)
@@ -120,12 +130,25 @@ class NewsFetcher:
                         if parsed:
                             logger.info("[NewsFetcher] Retrieved %d CVE advisories.", len(parsed))
                             return parsed
+                        last_error = ValueError("NVD response parsed to zero advisories")
             except (URLError, TimeoutError, json.JSONDecodeError, Exception) as exc:
+                last_error = exc
                 logger.warning("[NewsFetcher] Attempt %d failed: %s", attempt, exc)
                 if attempt < self.max_retries:
                     time.sleep(1.5 * attempt)
 
-        logger.warning("[NewsFetcher] Using fallback advisories to keep pipeline operational.")
+        if not self.allow_fallback:
+            raise NvdFetchError(
+                f"NVD unreachable after {self.max_retries} attempts; refusing to fabricate CVE data "
+                f"(set nvd.allow_fallback=true to allow sample data). Last error: {last_error}"
+            )
+
+        logger.warning(
+            "[NewsFetcher] NVD unreachable after %d attempts; nvd.allow_fallback=true, "
+            "returning SAMPLE/non-real fallback advisories (is_sample=True). Last error: %s",
+            self.max_retries,
+            last_error,
+        )
         return FALLBACK_ADVISORIES[:limit]
 
 

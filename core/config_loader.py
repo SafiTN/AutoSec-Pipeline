@@ -36,6 +36,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "default_limit": 3,
         "timeout_sec": 20,
         "max_retries": 2,
+        "allow_fallback": False,
     },
     "prompt_optimizer": {
         "language": "en",
