@@ -22,6 +22,7 @@ nvd:
   default_limit: 3
   timeout_sec: 20
   max_retries: 2
+  allow_fallback: false
 
 prompt_optimizer:
   language: "en"
