@@ -57,6 +57,9 @@ class NewsFetcher:
         self.timeout_sec: int = nvd_cfg.get("timeout_sec", 12)
         self.max_retries: int = nvd_cfg.get("max_retries", 2)
         self.allow_fallback: bool = nvd_cfg.get("allow_fallback", False)
+        self.lookback_days: int = nvd_cfg.get("lookback_days", 14)
+        self.max_results: int = nvd_cfg.get("max_results", 10)
+        self.default_limit: int = nvd_cfg.get("default_limit", 3)
 
     def _extract_cvss_info(self, cve_item: Dict[str, Any]) -> Dict[str, Any]:
         metrics = cve_item.get("metrics", {})
@@ -105,13 +108,14 @@ class NewsFetcher:
             )
         return advisories
 
-    def fetch_latest_cves(self, limit: int = 3) -> List[Dict[str, Any]]:
+    def fetch_latest_cves(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """جلب أحدث الثغرات من NVD API مع إعادة المحاولة والعودة للبيانات الاحتياطية عند الفشل."""
+        effective_limit = limit if limit is not None else self.default_limit
         now_utc = datetime.now(timezone.utc)
-        start_utc = now_utc - timedelta(days=14)
+        start_utc = now_utc - timedelta(days=self.lookback_days)
 
         params = {
-            "resultsPerPage": max(1, min(limit, 10)),
+            "resultsPerPage": max(1, min(effective_limit, self.max_results)),
             "pubStartDate": start_utc.strftime("%Y-%m-%dT00:00:00.000Z"),
             "pubEndDate": now_utc.strftime("%Y-%m-%dT23:59:59.999Z"),
         }
@@ -126,7 +130,7 @@ class NewsFetcher:
                 with urlopen(req, timeout=self.timeout_sec, context=context) as resp:
                     if resp.status == 200:
                         body = resp.read().decode("utf-8")
-                        parsed = self._parse_nvd_response(body, limit=limit)
+                        parsed = self._parse_nvd_response(body, limit=effective_limit)
                         if parsed:
                             logger.info("[NewsFetcher] Retrieved %d CVE advisories.", len(parsed))
                             return parsed
@@ -149,7 +153,7 @@ class NewsFetcher:
             self.max_retries,
             last_error,
         )
-        return FALLBACK_ADVISORIES[:limit]
+        return FALLBACK_ADVISORIES[:effective_limit]
 
 
 if __name__ == "__main__":

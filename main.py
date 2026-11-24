@@ -120,11 +120,14 @@ def _normalize_scenes_for_media(scenes: List[Dict[str, Any]]) -> List[Dict[str, 
 
 def run_pipeline(
     run_harness: bool = False,
-    cve_limit: int = 3,
+    cve_limit: Optional[int] = None,
     max_scenes: int = 3,
 ) -> Dict[str, Any]:
     """تشغيل الخط الكامل: التحقق الذاتي -> جلب الثغرات -> كتابة السيناريو -> إنتاج الفيديو."""
     settings = load_settings()
+    effective_cve_limit = (
+        cve_limit if cve_limit is not None else settings.get("nvd", {}).get("default_limit", 3)
+    )
 
     harness_summary: Dict[str, Any] = {}
     if run_harness:
@@ -141,7 +144,7 @@ def run_pipeline(
 
     logger.info("[Main] Step 2/4: Fetching latest CVEs via NewsFetcher...")
     fetcher = NewsFetcher(settings=settings)
-    advisories = fetcher.fetch_latest_cves(limit=cve_limit)
+    advisories = fetcher.fetch_latest_cves(limit=effective_cve_limit)
     selected_cve = _select_primary_advisory(advisories)
     logger.info(
         "[Main] Selected CVE: %s (Severity: %s, CVSS: %s)",
