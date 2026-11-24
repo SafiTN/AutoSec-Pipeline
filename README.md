@@ -46,3 +46,101 @@ AutoSec-Pipeline/
 ├── .gitignore                         # Excludes virtual environments, caches, and generated media
 ├── main.py                            # End-to-end pipeline orchestrator
 └── requirements.txt                   # Python dependencies
+```
+*(Note: `output/` and `output_media/` directories are generated automatically at runtime and excluded from version control via `.gitignore`.)*
+
+---
+
+## Prerequisites
+
+* **Python**: 3.10 or higher
+* **Ollama**: Installed and running locally with your configured model pulled:
+  ```bash
+  ollama pull qwen2.5-coder:7b
+  ```
+* **FFmpeg**: Available in your system `PATH` (or bundled via `imageio-ffmpeg` through `MoviePy`) for `libx264` / `aac` video encoding.
+* **Internet Access**: Required for querying NVD CVE advisories and synthesizing speech via `edge-tts`.
+
+---
+
+## Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/<YOUR_USERNAME>/AutoSec-Pipeline.git
+   cd AutoSec-Pipeline
+   ```
+
+2. **Create and activate a virtual environment**:
+   * **Windows (CMD)**:
+     ```cmd
+     python -m venv venv
+     venv\Scripts\activate
+     ```
+   * **Linux / macOS**:
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
+
+## Configuration
+
+Pipeline behavior is controlled via `config/settings.yaml`:
+
+* **LLM Settings**: Ollama endpoint URL, model name (`qwen2.5-coder:7b`), temperature, and timeout parameters.
+* **NVD / Advisory Settings**: Lookback window, maximum advisories fetched, and fallback behavior.
+* **Media Settings**:
+  * `output_directory`: Target folder for generated audio and final `.mp4` videos.
+  * `slides_directory`: Target folder for rendered `.png` scene slides.
+  * `visual_mode`: `"slide"` (uses `render_smart_scene_slide` with dark cybersecurity styling, automatic text wrapping, and CVE/Severity headers).
+  * `voice`: Edge-TTS voice identifier (e.g., `en-US-GuyNeural`).
+  * `resolution` & `video_fps`: Video dimensions (default `1280x720`) and frame rate (default `24`).
+
+---
+
+## Usage
+
+### Run the Full Pipeline
+Ensure Ollama is running locally, then execute:
+
+```bash
+python main.py
+```
+
+**What happens during a run:**
+1. Fetches the latest CVE advisories and selects the highest-severity candidate (`CVSS`).
+2. Generates a structured multi-scene script via Ollama.
+3. Synthesizes scene voiceovers (`MP3`) and renders dark-themed scene slides (`PNG`).
+4. Compiles the synchronized video (`MP4`) and writes a detailed run summary to `output/last_episode_manifest.json`.
+
+### Test Media Generation Standalone
+You can test slide rendering and video assembly independently without calling NVD or Ollama:
+
+```bash
+python modules/content_pipeline/media_generator.py
+```
+
+---
+
+## Running Tests
+
+Execute the unit test suite using `pytest`:
+
+```bash
+python -m pytest -v
+```
+
+---
+
+## Roadmap
+
+* [ ] Pass `cve_id` and `severity` metadata directly from `main.py` into `CyberMediaGenerator.build_video` for full header badges on every slide.
+* [ ] Add automated unit tests covering `CyberMediaGenerator.render_smart_scene_slide`.
+* [ ] Optional YouTube Data API v3 upload and metadata scheduling module.
