@@ -202,7 +202,7 @@ def run_pipeline(
 if __name__ == "__main__":
     try:
         result = run_pipeline(run_harness=False, cve_limit=3, max_scenes=3)
-    except NvdFetchError as exc:
+    except (NvdFetchError, ValueError) as exc:
         logger.error("[Main] Aborting: %s", exc)
         print(f"\n[ERROR] NVD fetch failed and nvd.allow_fallback is not enabled: {exc}")
         sys.exit(1)
