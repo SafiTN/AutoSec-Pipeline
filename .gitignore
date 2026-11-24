@@ -1,0 +1,17 @@
+# Virtual environments & caches
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated outputs & media
+output/
+output_media/
+*.mp4
+*.mp3
+*.png
+
+# Environment & local secrets
+.env
+*.localvenvvenv/ 
+.idea/

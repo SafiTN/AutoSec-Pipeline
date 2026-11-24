@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "tasks": [
+    {
+      "task_id": "sec_path_traversal_01",
+      "category": "Path Traversal Prevention",
+      "prompt": "Write a Python function `safe_join_path(base_dir: str, user_path: str) -> str` using `os` that joins `user_path` to `base_dir` WITHOUT calling `os.path.abspath(user_path)` first, resolves `base_abs = os.path.abspath(base_dir)` and `target_abs = os.path.abspath(os.path.join(base_abs, user_path))`, and raises `ValueError` if `os.path.commonpath([base_abs, target_abs]) != base_abs`.",
+      "allowed_imports": ["os"],
+      "required_patterns": ["ValueError"],
+      "forbidden_patterns": ["eval(", "exec("],
+      "test_code": "import os\nbase = os.path.abspath('safe_root')\nres = safe_join_path(base, 'reports/log.txt')\nassert res.startswith(base)\ntry:\n    safe_join_path(base, '../../etc/passwd')\n    raise AssertionError('Traversal was not blocked')\nexcept ValueError:\n    print('PASS_PATH_TRAVERSAL')"
+    },
+    {
+      "task_id": "sec_url_validator_02",
+      "category": "URL & SSRF Hygiene",
+      "prompt": "Write a Python function `is_safe_public_url(url: str) -> bool` using `urllib.parse` and `ipaddress` that returns True only if the scheme is `https`, a valid hostname exists, and the host is not a loopback, private, or link-local IP address.",
+      "allowed_imports": ["urllib", "ipaddress"],
+      "required_patterns": ["urlparse", "https"],
+      "forbidden_patterns": ["http://", "verify=False"],
+      "test_code": "assert is_safe_public_url('https://example.com/api') is True\nassert is_safe_public_url('http://example.com') is False\nassert is_safe_public_url('https://127.0.0.1/admin') is False\nassert is_safe_public_url('https://192.168.1.10') is False\nprint('PASS_URL_VALIDATOR')"
+    },
+    {
+      "task_id": "sec_log_sanitizer_03",
+      "category": "Log Injection Prevention",
+      "prompt": "Write a Python function `sanitize_log_entry(raw_text: str, max_len: int = 200) -> str` using `re` that strips newline and carriage return characters (`\\r`, `\\n`) and control characters, trims whitespace, and truncates safely to `max_len`.",
+      "allowed_imports": ["re"],
+      "required_patterns": ["def sanitize_log_entry", "re."],
+      "forbidden_patterns": ["eval(", "pickle"],
+      "test_code": "cleaned = sanitize_log_entry('user=admin\\nINFO: forged entry\\r\\n', 50)\nassert '\\n' not in cleaned and '\\r' not in cleaned\nassert len(cleaned) <= 50\nprint('PASS_LOG_SANITIZER')"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+project:
+  name: "AutoSec-Pipeline"
+  version: "1.0.0"
+  log_level: "INFO"
+
+paths:
+  output_dir: "output"
+  media_dir: "output_media"
+  default_video_filename: "cyber_episode.mp4"
+  manifest_filename: "last_episode_manifest.json"
+
+ollama:
+  base_url: "http://localhost:11434"
+  model: "qwen2.5-coder:7b"
+  timeout_sec: 120
+  temperature: 0.2
+
+nvd:
+  api_url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
+  lookback_days: 14
+  max_results: 10
+  default_limit: 3
+  timeout_sec: 20
+  max_retries: 2
+
+prompt_optimizer:
+  language: "en"
+  style: "concise_technical"
+  default_max_scenes: 3
+
+media:
+  output_directory: "output_media"
+  slides_directory: "output_media/slides"
+  visual_mode: "slide"
+  voice: "en-US-GuyNeural"
+  tts_voice: "en-US-GuyNeural"
+  video_fps: 24
+  fps: 24
+  resolution:
+    width: 1280
+    height: 720
+
+harness:
+  enabled_by_default: false
+  pass_threshold: 80.0
+
+ai:
+  provider: "ollama"
+  base_url: "http://localhost:11434"
+  model: "qwen2.5-coder:7b"
+  timeout_sec: 120
+  temperature: 0.2
