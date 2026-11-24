@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from core.config_loader import load_settings
 from core.harness_loop import AutoHarnessLoop
 from modules.content_pipeline.media_generator import CyberMediaGenerator
-from modules.content_pipeline.news_fetcher import NewsFetcher
+from modules.content_pipeline.news_fetcher import NewsFetcher, NvdFetchError
 from modules.content_pipeline.script_writer import ScriptWriter
 
 logging.basicConfig(
@@ -96,12 +96,7 @@ def _invoke_media_generator(
 def _select_primary_advisory(advisories: List[Dict[str, Any]]) -> Dict[str, Any]:
     """اختيار الثغرة الأعلى خطورة (CVSS) من القائمة المجلوبة."""
     if not advisories:
-        return {
-            "cve_id": "CVE-ADVISORY-DEFAULT",
-            "severity": "HIGH",
-            "cvss_score": 7.5,
-            "summary": "General software security hardening and vulnerability mitigation workflow.",
-        }
+        raise ValueError("No CVE advisories available to select from")
     return max(advisories, key=lambda item: float(item.get("cvss_score") or 0.0))
 
 def _normalize_scenes_for_media(scenes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -160,6 +155,11 @@ def run_pipeline(
     episode_script = writer.generate_episode_script(selected_cve, max_scenes=max_scenes)
     scenes = episode_script.get("scenes", [])
 
+    is_sample = bool(selected_cve.get("is_sample", False))
+    episode_title = episode_script.get("episode_title", "AutoSec Episode")
+    if is_sample:
+        episode_title = f"[SAMPLE] {episode_title}"
+
     logger.info("[Main] Step 4/4: Generating video via CyberMediaGenerator...")
     os.makedirs("output", exist_ok=True)
     output_video_path = os.path.abspath("autosec_master_episode.mp4")
@@ -169,7 +169,7 @@ def run_pipeline(
     generated_video = _invoke_media_generator(
         media_gen=media_gen,
         scenes=media_scenes,
-        episode_title=episode_script.get("episode_title", "AutoSec Episode"),
+        episode_title=episode_title,
         output_path=output_video_path,
         cve_id=selected_cve.get("cve_id"),
         severity=selected_cve.get("severity"),
@@ -185,6 +185,7 @@ def run_pipeline(
         if harness_summary
         else {"skipped": True},
         "selected_cve": selected_cve,
+        "is_sample": is_sample,
         "episode_script": episode_script,
         "output_video": generated_video,
     }
@@ -198,7 +199,13 @@ def run_pipeline(
 
 
 if __name__ == "__main__":
-    result = run_pipeline(run_harness=False, cve_limit=3, max_scenes=3)
+    try:
+        result = run_pipeline(run_harness=False, cve_limit=3, max_scenes=3)
+    except NvdFetchError as exc:
+        logger.error("[Main] Aborting: %s", exc)
+        print(f"\n[ERROR] NVD fetch failed and nvd.allow_fallback is not enabled: {exc}")
+        sys.exit(1)
+
     print("\n=== AutoSec-Pipeline Run Summary ===")
     print("CVE:", result["selected_cve"].get("cve_id"))
     print("Title:", result["episode_script"].get("episode_title"))
