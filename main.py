@@ -3,11 +3,12 @@ import json
 import logging
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Set
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from core.config_loader import load_settings
+from core.config_loader import load_settings, resolve_project_path
 from core.harness_loop import AutoHarnessLoop
 from modules.content_pipeline.media_generator import CyberMediaGenerator
 from modules.content_pipeline.news_fetcher import NewsFetcher, NvdFetchError
@@ -93,11 +94,78 @@ def _invoke_media_generator(
     return None
 
 
-def _select_primary_advisory(advisories: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """اختيار الثغرة الأعلى خطورة (CVSS) من القائمة المجلوبة."""
+def _covered_cves_path(settings: Dict[str, Any]) -> str:
+    """تحديد المسار المطلق لملف حالة الثغرات المُنشورة سابقاً (covered_cves.json)."""
+    paths_cfg = settings.get("paths", {}) if settings else {}
+    output_dir = paths_cfg.get("output_dir", "output")
+    covered_filename = paths_cfg.get("covered_cves_filename", "covered_cves.json")
+    return str(resolve_project_path(os.path.join(output_dir, covered_filename)))
+
+
+def _read_covered_cves_raw(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """قراءة ملف الثغرات المُغطاة بأمان: ملف مفقود أو تالف يُرجع قاموساً فارغاً دون توقف."""
+    path = _covered_cves_path(settings)
+    if not os.path.exists(path):
+        return {}
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+    except json.JSONDecodeError as exc:
+        logger.warning("[Main] covered_cves.json at %s is not valid JSON (%s); treating as empty.", path, exc)
+        return {}
+
+    if not isinstance(loaded, dict):
+        logger.warning(
+            "[Main] covered_cves.json at %s did not contain a JSON object; treating as empty.", path
+        )
+        return {}
+
+    return loaded
+
+
+def _load_covered_cve_ids(settings: Dict[str, Any]) -> Set[str]:
+    """تحميل مجموعة معرّفات الثغرات التي سبق نشرها لتفادي التكرار بين التشغيلات."""
+    return set(_read_covered_cves_raw(settings).keys())
+
+
+def _record_covered_cve(settings: Dict[str, Any], cve_id: str) -> None:
+    """تسجيل ثغرة حقيقية تم نشرها بنجاح في ملف الحالة الدائم عبر التشغيلات."""
+    path = _covered_cves_path(settings)
+    covered = _read_covered_cves_raw(settings)
+    covered[cve_id] = datetime.now(timezone.utc).isoformat()
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(covered, f, indent=2, ensure_ascii=False)
+
+
+def _select_primary_advisory(
+    advisories: List[Dict[str, Any]],
+    covered_cve_ids: Optional[Set[str]] = None,
+) -> Dict[str, Any]:
+    """اختيار الثغرة الأعلى خطورة (CVSS) من بين المرشحات غير المُغطاة سابقاً وذات درجة CVSS معروفة."""
     if not advisories:
         raise ValueError("No CVE advisories available to select from")
-    return max(advisories, key=lambda item: float(item.get("cvss_score") or 0.0))
+
+    covered_ids = covered_cve_ids or set()
+
+    with_cvss = [item for item in advisories if item.get("cvss_score") is not None]
+    if not with_cvss:
+        raise ValueError(
+            "No CVE advisories with a known CVSS score available to select from "
+            f"(all {len(advisories)} candidate(s) had cvss_score=None)"
+        )
+
+    uncovered = [item for item in with_cvss if item.get("cve_id") not in covered_ids]
+    if not uncovered:
+        raise ValueError(
+            "All CVE advisories with a known CVSS score have already been covered in a prior run "
+            f"({len(with_cvss)} candidate(s) filtered out by covered_cves.json); "
+            "wait for new CVEs, widen nvd.lookback_days/max_results, or prune covered_cves.json"
+        )
+
+    return max(uncovered, key=lambda item: float(item.get("cvss_score") or 0.0))
 
 def _normalize_scenes_for_media(scenes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """ضمان وجود المفاتيح التي تتوقعها build_video مثل visual_text."""
@@ -126,7 +194,7 @@ def run_pipeline(
     """تشغيل الخط الكامل: التحقق الذاتي -> جلب الثغرات -> كتابة السيناريو -> إنتاج الفيديو."""
     settings = load_settings()
     effective_cve_limit = (
-        cve_limit if cve_limit is not None else settings.get("nvd", {}).get("default_limit", 3)
+        cve_limit if cve_limit is not None else settings.get("nvd", {}).get("max_results", 10)
     )
 
     harness_summary: Dict[str, Any] = {}
@@ -145,7 +213,8 @@ def run_pipeline(
     logger.info("[Main] Step 2/4: Fetching latest CVEs via NewsFetcher...")
     fetcher = NewsFetcher(settings=settings)
     advisories = fetcher.fetch_latest_cves(limit=effective_cve_limit)
-    selected_cve = _select_primary_advisory(advisories)
+    covered_cve_ids = _load_covered_cve_ids(settings)
+    selected_cve = _select_primary_advisory(advisories, covered_cve_ids)
     logger.info(
         "[Main] Selected CVE: %s (Severity: %s, CVSS: %s)",
         selected_cve.get("cve_id"),
@@ -197,6 +266,9 @@ def run_pipeline(
     manifest_path = os.path.join("output", "last_episode_manifest.json")
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    if generated_video is not None and not selected_cve.get("is_sample"):
+        _record_covered_cve(settings, selected_cve["cve_id"])
 
     logger.info("[Main] Pipeline completed. Manifest saved to %s", manifest_path)
     return manifest

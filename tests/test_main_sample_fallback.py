@@ -146,6 +146,14 @@ def test_run_pipeline_manifest_is_sample_false_for_real_advisory(monkeypatch, tm
     monkeypatch.setattr(main, "NewsFetcher", _StubFetcherReal)
     monkeypatch.setattr(main, "ScriptWriter", _StubScriptWriter)
     monkeypatch.setattr(main, "CyberMediaGenerator", _StubMediaGenerator)
+    # This test exercises manifest.is_sample only; it does not use load_settings
+    # overrides, so covered_cves.json would otherwise be resolved (via
+    # resolve_project_path, which is intentionally PROJECT_ROOT-based per
+    # docs/adr/0001-covered-cves-state-file.md, not cwd-based) against the real
+    # repo's output/ dir. Stub the T05 recording step out here so this
+    # unrelated test can't leave a stray test CVE id in the real
+    # output/covered_cves.json state file.
+    monkeypatch.setattr(main, "_record_covered_cve", lambda *args, **kwargs: None)
 
     manifest = main.run_pipeline(run_harness=False, cve_limit=1, max_scenes=1)
 
