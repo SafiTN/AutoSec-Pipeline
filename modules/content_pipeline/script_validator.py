@@ -14,11 +14,14 @@ SEVERITY_LEVELS = ("critical", "high", "medium", "low", "none")
 _CVE_RE = re.compile(r"cve-\d{4}-\d{4,}")
 _LEVEL = "(" + "|".join(SEVERITY_LEVELS) + ")"
 _SEVERITY_RES = (
-    re.compile(rf"(?<!\w){_LEVEL}\s{{0,5}}severity(?!\w)"),
-    re.compile(rf"(?<!\w)severity\s{{0,5}}(?:of|is|:)\s{{0,5}}{_LEVEL}(?!\w)"),
-    re.compile(rf"(?<!\w)rated\s{{1,5}}{_LEVEL}(?!\w)"),
+    re.compile(rf"(?<!\w){_LEVEL}[\s-]{{0,5}}severity(?!\w)"),
+    re.compile(rf"(?<!\w)severity(?:\s{{1,5}}level)?\s{{0,5}}(?:of|is|:)\s{{0,5}}{_LEVEL}(?!\w)"),
+    re.compile(rf"(?<!\w)rated(?:\s{{0,5}}:\s{{0,5}}|\s{{1,5}}){_LEVEL}(?!\w)"),
 )
-_CVSS_RE = re.compile(r"cvss(?:\s{0,3}(?:v|version\s)\s{0,2}\d+(?:\.\d+)?)?[^\d]{0,20}(\d+\.\d+)")
+_CVSS_VERSION_RE = re.compile(
+    r"(?<=cvss)(?:\s{0,3}(?:v|version\s)\s{0,2}\d+(?:\.\d+)?|\s{0,3}(?:3\.\d|4\.0)(?![\d.]*\d))"
+)
+_CVSS_RE = re.compile(r"cvss[^\d]{0,20}(\d+\.\d+)")
 _VERSION_RE = re.compile(r"(?<![\w.])v?(\d+\.\d+(?:\.\d+)*)(?!\w|\.\d)")
 
 
@@ -34,6 +37,7 @@ class ScriptValidationError(ValueError):
 
 def _normalize(text: Any) -> str:
     value = unicodedata.normalize("NFKC", str(text)).casefold()
+    value = "".join(c for c in value if unicodedata.category(c) != "Cf")
     return re.sub(r"\s+", " ", value).strip()
 
 
@@ -87,6 +91,7 @@ def _check_text(text: str, advisory: Mapping[str, Any], adv_text: str, text_rule
 
     # (c) CVSS score
     score = advisory.get("cvss_score")
+    text = _CVSS_VERSION_RE.sub("", text)  # drop metric version ("CVSS v3.1")
     for token in _CVSS_RE.findall(text):
         if not _cvss_equal(token, score):
             out.append(f"CVSS score {token} does not match advisory")
@@ -95,8 +100,9 @@ def _check_text(text: str, advisory: Mapping[str, Any], adv_text: str, text_rule
         return
 
     # (d) invented versions
+    adv_versions = set(_VERSION_RE.findall(adv_text))
     for token in _VERSION_RE.findall(text):
-        if token in adv_text or _cvss_equal(token, score):
+        if token in adv_versions or _cvss_equal(token, score):
             continue
         out.append(f"version {token} not present in advisory data")
 
