@@ -22,6 +22,7 @@ relative `output_dir` would otherwise leak a stray `covered_cves.json` into
 the real repository (see docs/adr/0001-covered-cves-state-file.md and the
 pre-existing stubbing in tests/test_main_sample_fallback.py).
 """
+
 import json
 import logging
 from datetime import datetime
@@ -34,6 +35,7 @@ import main
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _settings_for_tmp(tmp_path, nvd_overrides=None):
     """Settings dict whose covered_cves.json always resolves inside tmp_path."""
@@ -74,8 +76,7 @@ class _StubMediaGeneratorSuccess:
     def __init__(self, settings=None):
         self.settings = settings
 
-    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None,
-                    severity=None, is_sample=False):
+    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None, severity=None, is_sample=False):
         out = Path(self.settings["paths"]["output_dir"]) / final_video_name
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(b"fake-mp4")
@@ -128,6 +129,7 @@ class _StubFetcherSample:
 # ---------------------------------------------------------------------------
 # AC 8b/8c/8d: _select_primary_advisory filtering + ValueError cases.
 # ---------------------------------------------------------------------------
+
 
 def test_select_primary_advisory_empty_list_raises_value_error():
     with pytest.raises(ValueError, match="No CVE advisories available"):
@@ -190,6 +192,7 @@ def test_select_primary_advisory_highest_cvss_wins_with_no_covered_arg_backcompa
 # AC 8e: _load_covered_cve_ids -- missing file, corrupt JSON, non-dict JSON.
 # ---------------------------------------------------------------------------
 
+
 def test_load_covered_cve_ids_missing_file_returns_empty_set(tmp_path):
     settings = _settings_for_tmp(tmp_path)
     assert main._load_covered_cve_ids(settings) == set()
@@ -199,6 +202,7 @@ def test_load_covered_cve_ids_valid_file_returns_keys_as_set(tmp_path):
     settings = _settings_for_tmp(tmp_path)
     path = main._covered_cves_path(settings)
     import os
+
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"CVE-X": "2026-01-01T00:00:00+00:00"}, f)
@@ -210,6 +214,7 @@ def test_load_covered_cve_ids_corrupt_json_returns_empty_set_and_warns(tmp_path,
     settings = _settings_for_tmp(tmp_path)
     path = main._covered_cves_path(settings)
     import os
+
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write("{not valid json")
@@ -225,6 +230,7 @@ def test_load_covered_cve_ids_non_dict_json_returns_empty_set_and_warns(tmp_path
     settings = _settings_for_tmp(tmp_path)
     path = main._covered_cves_path(settings)
     import os
+
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(["CVE-A", "CVE-B"], f)
@@ -239,6 +245,7 @@ def test_load_covered_cve_ids_non_dict_json_returns_empty_set_and_warns(tmp_path
 # ---------------------------------------------------------------------------
 # AC 8e/8f: _record_covered_cve -- create, merge, ISO timestamp format.
 # ---------------------------------------------------------------------------
+
 
 def test_record_covered_cve_creates_file_when_missing(tmp_path):
     settings = _settings_for_tmp(tmp_path)
@@ -256,6 +263,7 @@ def test_record_covered_cve_merges_without_dropping_existing_entries(tmp_path):
     settings = _settings_for_tmp(tmp_path)
     path = main._covered_cves_path(settings)
     import os
+
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"CVE-OLD": "2025-01-01T00:00:00+00:00"}, f)
@@ -286,6 +294,7 @@ def test_record_covered_cve_writes_valid_iso8601_utc_timestamp(tmp_path):
 # ---------------------------------------------------------------------------
 # AC 8f/8g: run_pipeline integration -- record only on full, real success.
 # ---------------------------------------------------------------------------
+
 
 def test_run_pipeline_success_with_real_advisory_records_covered_cve(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
@@ -321,6 +330,7 @@ def test_run_pipeline_media_generation_failure_does_not_record_cve(monkeypatch, 
 
     covered_path = main._covered_cves_path(settings)
     import os
+
     assert not os.path.exists(covered_path)
 
 
@@ -339,4 +349,5 @@ def test_run_pipeline_sample_advisory_never_recorded_even_on_full_success(monkey
 
     covered_path = main._covered_cves_path(settings)
     import os
+
     assert not os.path.exists(covered_path)

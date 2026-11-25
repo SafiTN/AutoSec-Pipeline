@@ -96,8 +96,14 @@ def _cvss_equal(token: str, score: Any) -> bool:
         return False
 
 
-def _check_text(text: str, advisory: Mapping[str, Any], adv_text: str, text_rules: bool,
-                terms: List[Tuple[str, "re.Pattern[str]"]], out: List[str]) -> None:
+def _check_text(
+    text: str,
+    advisory: Mapping[str, Any],
+    adv_text: str,
+    text_rules: bool,
+    terms: List[Tuple[str, "re.Pattern[str]"]],
+    out: List[str],
+) -> None:
     # (a) CVE ids
     adv_cve_norm = _normalize(advisory.get("cve_id", ""))
     adv_ids = _canon_cves(adv_cve_norm)

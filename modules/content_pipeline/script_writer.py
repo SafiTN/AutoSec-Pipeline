@@ -48,6 +48,7 @@ def normalize_scenes(
     scenes: List[Dict[str, Any]] = []
     if not isinstance(raw_scenes, list):
         return scenes
+
     def clean(t: str) -> str:
         return optimizer.clean_text(_strip_cf(t))
 

@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 @dataclass
 class HarnessSpec:
     """تعريف مهمة الاختبار الأمني ومواصفات تشغيل الوكيل."""
+
     task_id: str
     description: str
     target_code: str

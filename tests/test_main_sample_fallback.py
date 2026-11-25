@@ -6,6 +6,7 @@ output clearly in the manifest.
 Fully offline: NewsFetcher, ScriptWriter and CyberMediaGenerator are replaced
 with lightweight stubs so no real NVD/Ollama/Edge-TTS/MoviePy work happens.
 """
+
 import json
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from modules.content_pipeline.news_fetcher import FALLBACK_ADVISORIES, NvdFetchE
 # ---------------------------------------------------------------------------
 # Stubs standing in for the real pipeline collaborators.
 # ---------------------------------------------------------------------------
+
 
 class _StubFetcherRaising:
     def __init__(self, settings=None):
@@ -76,8 +78,7 @@ class _StubMediaGenerator:
     def __init__(self, settings=None):
         self.settings = settings
 
-    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None,
-                    severity=None, is_sample=False):
+    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None, severity=None, is_sample=False):
         _StubMediaGenerator.last_call_kwargs = {
             "scenes": scenes,
             "final_video_name": final_video_name,
@@ -112,6 +113,7 @@ def _tmp_settings(monkeypatch, tmp_path):
 # AC: _select_primary_advisory no longer fabricates CVE-ADVISORY-DEFAULT.
 # ---------------------------------------------------------------------------
 
+
 def test_select_primary_advisory_raises_on_empty_list():
     with pytest.raises(ValueError):
         main._select_primary_advisory([])
@@ -131,6 +133,7 @@ def test_select_primary_advisory_still_picks_highest_cvss():
 # AC: run_pipeline must not swallow NvdFetchError.
 # ---------------------------------------------------------------------------
 
+
 def test_run_pipeline_propagates_nvd_fetch_error(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(main, "NewsFetcher", _StubFetcherRaising)
@@ -145,6 +148,7 @@ def test_run_pipeline_propagates_nvd_fetch_error(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 # AC: manifest carries is_sample, and the title is prefixed for sample data.
 # ---------------------------------------------------------------------------
+
 
 def test_run_pipeline_manifest_is_sample_true_for_fallback_advisory(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
@@ -189,6 +193,7 @@ def test_run_pipeline_manifest_episode_title_is_prefixed_for_sample_per_ac(monke
 # ---------------------------------------------------------------------------
 # T09: path helpers, prompt_version, is_sample forwarding, media failure paths.
 # ---------------------------------------------------------------------------
+
 
 def test_manifest_path_comes_from_settings(tmp_path):
     settings = {"paths": {"output_dir": str(tmp_path / "o"), "manifest_filename": "m.json"}}
@@ -264,9 +269,7 @@ class _RaisingMedia(_StubMediaGenerator):
 
 
 @pytest.mark.parametrize("media_cls", [_MissingFileMedia, _RaisingMedia])
-def test_media_failure_writes_manifest_without_video_and_skips_recording(
-    monkeypatch, tmp_path, media_cls
-):
+def test_media_failure_writes_manifest_without_video_and_skips_recording(monkeypatch, tmp_path, media_cls):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(main, "NewsFetcher", _StubFetcherReal)
     monkeypatch.setattr(main, "ScriptWriter", _StubScriptWriter)

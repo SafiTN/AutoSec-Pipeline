@@ -4,6 +4,7 @@ SECURITY MODEL (see docs/adr/0003-sandbox-limits.md): the layers below are an
 accident guard for output from a small local model. They are NOT a security
 boundary and must never be used to run untrusted code from outside this pipeline.
 """
+
 import ast
 import logging
 import os
@@ -22,23 +23,77 @@ from modules.cyber_agent.base_harness import BaseHarness, HarnessSpec
 logger = logging.getLogger("AutoSec.SandboxExec")
 
 FORBIDDEN_CALLS = {
-    "eval", "exec", "compile", "__import__", "open",
-    "getattr", "setattr", "delattr", "globals", "locals", "vars",
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "open",
+    "getattr",
+    "setattr",
+    "delattr",
+    "globals",
+    "locals",
+    "vars",
 }
 # Dotted entries match the module itself and any submodule.
 FORBIDDEN_MODULES = {
-    "subprocess", "socket", "shutil", "ctypes", "pickle", "pty", "winreg",
-    "urllib.request", "http", "requests", "ftplib", "smtplib", "telnetlib",
-    "socketserver", "xmlrpc", "ssl", "multiprocessing", "asyncio",
+    "subprocess",
+    "socket",
+    "shutil",
+    "ctypes",
+    "pickle",
+    "pty",
+    "winreg",
+    "urllib.request",
+    "http",
+    "requests",
+    "ftplib",
+    "smtplib",
+    "telnetlib",
+    "socketserver",
+    "xmlrpc",
+    "ssl",
+    "multiprocessing",
+    "asyncio",
 }
 # Names that must not be imported from any module, used as attributes, or appear
 # as string constants.
 FORBIDDEN_NAMES = {
-    "system", "popen", "fork", "forkpty", "execl", "execle", "execlp", "execlpe",
-    "execv", "execve", "execvp", "execvpe", "spawnl", "spawnle", "spawnlp",
-    "spawnlpe", "spawnv", "spawnve", "spawnvp", "spawnvpe", "startfile",
-    "open", "fdopen", "unlink", "rmdir", "rename", "kill", "posix_spawn",
-    "posix_spawnp", "scandir", "listdir", "walk", "environ", "chdir", "mkdir",
+    "system",
+    "popen",
+    "fork",
+    "forkpty",
+    "execl",
+    "execle",
+    "execlp",
+    "execlpe",
+    "execv",
+    "execve",
+    "execvp",
+    "execvpe",
+    "spawnl",
+    "spawnle",
+    "spawnlp",
+    "spawnlpe",
+    "spawnv",
+    "spawnve",
+    "spawnvp",
+    "spawnvpe",
+    "startfile",
+    "open",
+    "fdopen",
+    "unlink",
+    "rmdir",
+    "rename",
+    "kill",
+    "posix_spawn",
+    "posix_spawnp",
+    "scandir",
+    "listdir",
+    "walk",
+    "environ",
+    "chdir",
+    "mkdir",
     "makedirs",
 }
 # Too common as str/list methods and string values (str.replace, list.remove,
@@ -46,13 +101,30 @@ FORBIDDEN_NAMES = {
 # when imported by name and as attributes of the `os` name (see static check).
 AMBIGUOUS_OS_NAMES = {"remove", "replace"}
 FORBIDDEN_IDENTIFIERS = {
-    "__builtins__", "__subclasses__", "__globals__", "__dict__", "__class__",
-    "__bases__", "__mro__", "__code__", "__closure__", "__loader__", "__spec__",
+    "__builtins__",
+    "__subclasses__",
+    "__globals__",
+    "__dict__",
+    "__class__",
+    "__bases__",
+    "__mro__",
+    "__code__",
+    "__closure__",
+    "__loader__",
+    "__spec__",
 }
 # Attribute names that reach other modules through an allowed one (os.sys.modules).
 FORBIDDEN_ATTRS_ANY = {
-    "sys", "modules", "os", "builtins", "codecs", "importlib",
-    "__import__", "getattr", "setattr", "delattr",
+    "sys",
+    "modules",
+    "os",
+    "builtins",
+    "codecs",
+    "importlib",
+    "__import__",
+    "getattr",
+    "setattr",
+    "delattr",
 }
 # "http" as a string is a legitimate URL scheme value, so it is exempt from the
 # string-constant check (the module itself stays forbidden).
@@ -63,7 +135,7 @@ _FSIZE_MULTIPLE = 4  # RLIMIT_FSIZE = max_output_bytes * this
 
 # Runner executed instead of the candidate. Runtime socket block is an accident
 # guard only (trivially bypassable); the static check stays the first layer.
-_RUNNER_SOURCE = '''import runpy, socket, sys, _socket
+_RUNNER_SOURCE = """import runpy, socket, sys, _socket
 
 def _blocked(*args, **kwargs):
     raise OSError("network access is disabled in the sandbox")
@@ -75,7 +147,7 @@ socket.getaddrinfo = _blocked
 _socket.socket = _blocked
 _socket.getaddrinfo = _blocked
 runpy.run_path(sys.argv[1], run_name="__main__")
-'''
+"""
 
 
 def _module_matches(name: str, entries) -> bool:
@@ -127,8 +199,10 @@ def _is_forbidden_string(value: str) -> bool:
     if value in _STRING_EXEMPT:
         return False
     return (
-        value in FORBIDDEN_NAMES or value in FORBIDDEN_CALLS
-        or value in FORBIDDEN_IDENTIFIERS or value in FORBIDDEN_ATTRS_ANY
+        value in FORBIDDEN_NAMES
+        or value in FORBIDDEN_CALLS
+        or value in FORBIDDEN_IDENTIFIERS
+        or value in FORBIDDEN_ATTRS_ANY
         or _is_forbidden_module(value)
     )
 
@@ -147,8 +221,7 @@ def _fold_str(node: ast.AST) -> Optional[str]:
 class _OSLimits:
     """Platform-specific resource limits; isolated so tests can mock it."""
 
-    def __init__(self, max_memory_mb: int, max_processes: int, cpu_seconds: int,
-                 max_file_bytes: Optional[int] = None):
+    def __init__(self, max_memory_mb: int, max_processes: int, cpu_seconds: int, max_file_bytes: Optional[int] = None):
         self.max_memory_mb = max_memory_mb
         self.max_processes = max_processes
         self.cpu_seconds = cpu_seconds
@@ -229,8 +302,10 @@ class _OSLimits:
             ]
 
         class IOC(ctypes.Structure):
-            _fields_ = [(n, ctypes.c_uint64) for n in (
-                "ReadOps", "WriteOps", "OtherOps", "ReadBytes", "WriteBytes", "OtherBytes")]
+            _fields_ = [
+                (n, ctypes.c_uint64)
+                for n in ("ReadOps", "WriteOps", "OtherOps", "ReadBytes", "WriteBytes", "OtherBytes")
+            ]
 
         class EXT(ctypes.Structure):
             _fields_ = [
@@ -245,8 +320,7 @@ class _OSLimits:
         k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         k32.CreateJobObjectW.restype = wintypes.HANDLE
         k32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
-        k32.SetInformationJobObject.argtypes = [
-            wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD]
+        k32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD]
         k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
         k32.CloseHandle.argtypes = [wintypes.HANDLE]
 
@@ -317,8 +391,9 @@ class SandboxExecutor(BaseHarness):
             work_root = defaults["work_root"]
         elif not _inside_project(work_root):
             logger.warning(
-                "sandbox.work_root=%r must resolve inside the project and not be the "
-                "project root; using default", work_root)
+                "sandbox.work_root=%r must resolve inside the project and not be the project root; using default",
+                work_root,
+            )
             work_root = defaults["work_root"]
         cfg["work_root"] = work_root
         allow = raw.get("allow_unlimited", defaults["allow_unlimited"])
@@ -342,27 +417,26 @@ class SandboxExecutor(BaseHarness):
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if _is_forbidden_module(alias.name) or not _is_allowed_module(
-                        alias.name, allowed_imports
-                    ):
+                    if _is_forbidden_module(alias.name) or not _is_allowed_module(alias.name, allowed_imports):
                         violations.append(f"Forbidden import: {alias.name}")
             elif isinstance(node, ast.ImportFrom):
                 if node.level > 0 or not node.module:
                     violations.append("Forbidden relative import")
                     continue
-                if _is_forbidden_module(node.module) or not _is_allowed_module(
-                    node.module, allowed_imports
-                ):
+                if _is_forbidden_module(node.module) or not _is_allowed_module(node.module, allowed_imports):
                     violations.append(f"Forbidden from-import: {node.module}")
                 for alias in node.names:
                     if alias.name == "*":
                         violations.append(f"Forbidden star import: {node.module}")
                     elif _is_forbidden_module(f"{node.module}.{alias.name}"):
                         violations.append(f"Forbidden from-import: {node.module}.{alias.name}")
-                    elif _is_forbidden_attr(alias.name) or alias.name in FORBIDDEN_CALLS \
-                            or alias.name in FORBIDDEN_IDENTIFIERS \
-                            or alias.name in AMBIGUOUS_OS_NAMES \
-                            or alias.name in FORBIDDEN_ATTRS_ANY:
+                    elif (
+                        _is_forbidden_attr(alias.name)
+                        or alias.name in FORBIDDEN_CALLS
+                        or alias.name in FORBIDDEN_IDENTIFIERS
+                        or alias.name in AMBIGUOUS_OS_NAMES
+                        or alias.name in FORBIDDEN_ATTRS_ANY
+                    ):
                         violations.append(f"Forbidden name import: {alias.name}")
             elif isinstance(node, ast.Constant):
                 if isinstance(node.value, str) and _is_forbidden_string(node.value):
@@ -380,11 +454,9 @@ class SandboxExecutor(BaseHarness):
                 violations.append(f"Forbidden name: {node.id}")
             elif isinstance(node, ast.Attribute):
                 attr = node.attr
-                if attr in FORBIDDEN_IDENTIFIERS or attr in FORBIDDEN_ATTRS_ANY \
-                        or _is_forbidden_attr(attr):
+                if attr in FORBIDDEN_IDENTIFIERS or attr in FORBIDDEN_ATTRS_ANY or _is_forbidden_attr(attr):
                     violations.append(f"Forbidden attribute: {attr}")
-                elif isinstance(node.value, ast.Name) and node.value.id == "os" \
-                        and attr != "path":
+                elif isinstance(node.value, ast.Name) and node.value.id == "os" and attr != "path":
                     violations.append(f"Forbidden os attribute: {attr}")
 
         return violations
@@ -428,8 +500,12 @@ class SandboxExecutor(BaseHarness):
 
     def _result(self, start: float, **kw: Any) -> Dict[str, Any]:
         base = {
-            "passed": False, "stdout": "", "stderr": "", "exit_code": 1,
-            "duration_sec": round(time.perf_counter() - start, 4), "violations": [],
+            "passed": False,
+            "stdout": "",
+            "stderr": "",
+            "exit_code": 1,
+            "duration_sec": round(time.perf_counter() - start, 4),
+            "violations": [],
         }
         base.update(kw)
         return base
@@ -451,7 +527,9 @@ class SandboxExecutor(BaseHarness):
 
         timeout = min(float(spec.timeout_sec), float(self.cfg["timeout_sec"]))
         limits = _OSLimits(
-            int(self.cfg["max_memory_mb"]), int(self.cfg["max_processes"]), int(timeout) + 1,
+            int(self.cfg["max_memory_mb"]),
+            int(self.cfg["max_processes"]),
+            int(timeout) + 1,
             max_file_bytes=int(self.cfg["max_output_bytes"]) * _FSIZE_MULTIPLE,
         )
         try:
@@ -490,8 +568,8 @@ class SandboxExecutor(BaseHarness):
                             violations=["SandboxLimitsUnavailable"],
                         )
                     logger.warning(
-                        "[%s] Running WITHOUT OS limits (sandbox.allow_unlimited=true): %s",
-                        spec.task_id, limit_error)
+                        "[%s] Running WITHOUT OS limits (sandbox.allow_unlimited=true): %s", spec.task_id, limit_error
+                    )
                     try:
                         limits.resume(proc)
                     except Exception as exc:  # already running, or resume impossible

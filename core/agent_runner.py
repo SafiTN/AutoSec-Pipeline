@@ -12,14 +12,14 @@ class AgentRunner:
         """مشغل الوكيل الأمني المرتبط بنماذج Ollama المحلية"""
         self.settings = settings or load_settings()
         ai_cfg = (
-                self.settings.get("ai")
-                or self.settings.get("ollama")
-                or {
-                    "base_url": "http://localhost:11434",
-                    "model": "qwen2.5-coder:7b",
-                    "timeout_sec": 120,
-                    "temperature": 0.2,
-                }
+            self.settings.get("ai")
+            or self.settings.get("ollama")
+            or {
+                "base_url": "http://localhost:11434",
+                "model": "qwen2.5-coder:7b",
+                "timeout_sec": 120,
+                "temperature": 0.2,
+            }
         )
 
         self.provider = ai_cfg.get("provider", "ollama")
@@ -36,9 +36,7 @@ class AgentRunner:
             "prompt": prompt,
             "system": system_prompt,
             "stream": False,
-            "options": {
-                "temperature": self.temperature
-            }
+            "options": {"temperature": self.temperature},
         }
 
         try:

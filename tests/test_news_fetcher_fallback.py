@@ -6,6 +6,7 @@ live NVD API, Ollama, or TTS. Covers backlog item T04 AC points 1-3 and 7,
 plus the edge cases called out in the QA brief: empty NVD response,
 HTTP/timeout errors, advisory without CVSS, and duplicate CVE ids.
 """
+
 import json
 from urllib.error import URLError
 
@@ -56,6 +57,7 @@ def _no_sleep(monkeypatch):
 # AC 1 & 2: config comes from the `nvd` section, with safe defaults.
 # ---------------------------------------------------------------------------
 
+
 def test_init_reads_all_fields_from_nvd_section():
     fetcher = NewsFetcher(settings=_settings(allow_fallback=True, max_retries=5))
     assert fetcher.api_url == "https://example.invalid/cves"
@@ -81,6 +83,7 @@ def test_init_allow_fallback_defaults_false_when_key_missing():
 # ---------------------------------------------------------------------------
 # AC 3: all retries exhausted.
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_raises_nvd_fetch_error_when_allow_fallback_false(monkeypatch):
     """Network errors on every attempt + allow_fallback False -> NvdFetchError, no fallback data."""
@@ -153,6 +156,7 @@ def test_fetch_returns_full_fallback_list_when_limit_covers_it(monkeypatch):
 # failed attempts, exhausting retries exactly like network errors.
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_empty_parsed_response_is_treated_as_failure(monkeypatch):
     empty_body = json.dumps({"vulnerabilities": []}).encode("utf-8")
 
@@ -195,6 +199,7 @@ def test_fetch_malformed_json_is_treated_as_failure(monkeypatch):
 # Successful parse path: real advisories are explicitly tagged is_sample=False.
 # ---------------------------------------------------------------------------
 
+
 def _nvd_body(entries):
     return json.dumps({"vulnerabilities": entries}).encode("utf-8")
 
@@ -207,9 +212,7 @@ def test_fetch_success_marks_real_advisories_not_sample(monkeypatch):
                     "id": "CVE-2026-10001",
                     "published": "2026-01-01T00:00:00.000",
                     "descriptions": [{"lang": "en", "value": "A real vulnerability description."}],
-                    "metrics": {
-                        "cvssMetricV31": [{"cvssData": {"baseScore": 8.8, "baseSeverity": "HIGH"}}]
-                    },
+                    "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": 8.8, "baseSeverity": "HIGH"}}]},
                     "references": [{"url": "https://example.com/advisory"}],
                 }
             },

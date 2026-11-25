@@ -5,6 +5,7 @@ feedback, config defaults and run_pipeline propagation.
 Fully offline: the Ollama call (AgentRunner.query_local_agent) is replaced by a
 scripted fake; no network, no TTS, nothing written to the real output/.
 """
+
 import json
 import logging
 
@@ -41,6 +42,7 @@ def check(narration="", advisory=None, rules=RULES, **kw):
 # Validator: CVE id
 # ---------------------------------------------------------------------------
 
+
 def test_clean_script_passes():
     text = "CVE-2026-12345 is rated high severity with a CVSS score of 9.8 in Foo 2.4.1, fixed in 2.5.0."
     assert check(text) == []
@@ -71,14 +73,18 @@ def test_sample_suffix_id_not_flagged():
 # Validator: severity
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text", [
-    "a critical severity flaw",
-    "The severity is critical.",
-    "severity of CRITICAL",
-    "severity: critical",
-    "This was rated Critical.",
-    "CRITICAL   severity",
-])
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "a critical severity flaw",
+        "The severity is critical.",
+        "severity of CRITICAL",
+        "severity: critical",
+        "This was rated Critical.",
+        "CRITICAL   severity",
+    ],
+)
 def test_severity_mismatch_patterns_flagged(text):
     assert any(x.startswith("severity") for x in check(text))
 
@@ -103,6 +109,7 @@ def test_unknown_severity_no_claim_passes():
 # Validator: CVSS
 # ---------------------------------------------------------------------------
 
+
 def test_cvss_mismatch_flagged():
     assert any(x.startswith("CVSS") for x in check("CVSS score of 7.5"))
 
@@ -126,6 +133,7 @@ def test_cvss_with_none_score_flags_any_value():
 # Validator: versions
 # ---------------------------------------------------------------------------
 
+
 def test_invented_version_flagged():
     assert any(x.startswith("version") for x in check("Upgrade to version 9.9 now"))
 
@@ -139,12 +147,15 @@ def test_v_prefixed_invented_version_flagged():
     assert any("3.4.5" in x for x in check("Fixed in v3.4.5"))
 
 
-@pytest.mark.parametrize("text", [
-    "Foo 2.4.1 is affected.",   # from summary
-    "Versions 2.4.1 and earlier.",  # affected_versions
-    "Fixed in 2.5.0.",          # fixed_versions (list)
-    "Fixed in v2.5.0, ok.",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Foo 2.4.1 is affected.",  # from summary
+        "Versions 2.4.1 and earlier.",  # affected_versions
+        "Fixed in 2.5.0.",  # fixed_versions (list)
+        "Fixed in v2.5.0, ok.",
+    ],
+)
 def test_versions_from_advisory_fields_pass(text):
     assert check(text) == []
 
@@ -161,17 +172,21 @@ def test_not_yet_specified_wording_passes():
 # Validator: forbidden terms and evasion
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text", [
-    "Craft a payload for it",
-    "Here is exploit code",
-    "write shellcode",
-    "open a reverse shell",
-    "a proof of concept exists",
-    "a PoC exists",
-    "step-by-step exploit guide",
-    "weaponized tooling",
-    "weaponization",
-])
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Craft a payload for it",
+        "Here is exploit code",
+        "write shellcode",
+        "open a reverse shell",
+        "a proof of concept exists",
+        "a PoC exists",
+        "step-by-step exploit guide",
+        "weaponized tooling",
+        "weaponization",
+    ],
+)
 def test_forbidden_terms_flagged(text):
     assert any(x.startswith("forbidden term") for x in check(text))
 
@@ -184,15 +199,18 @@ def test_word_boundary_poc_not_substring():
     assert check("The topic of epoch is pocket sized.") == []
 
 
-@pytest.mark.parametrize("text", [
-    "PAYLOAD",
-    "PayLoad",
-    "exploit    code",
-    "exploit\n\tcode",
-    "ｐａｙｌｏａｄ",  # fullwidth 'payload' (NFKC)
-    "SHELLCODE",
-    "Proof   Of\nConcept",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "PAYLOAD",
+        "PayLoad",
+        "exploit    code",
+        "exploit\n\tcode",
+        "ｐａｙｌｏａｄ",  # fullwidth 'payload' (NFKC)
+        "SHELLCODE",
+        "Proof   Of\nConcept",
+    ],
+)
 def test_forbidden_terms_case_whitespace_unicode_evasion(text):
     assert any(x.startswith("forbidden term") for x in check(text))
 
@@ -238,6 +256,7 @@ def test_very_long_input_is_fast():
 # Error type
 # ---------------------------------------------------------------------------
 
+
 def test_error_is_valueerror_and_carries_attempts():
     err = ScriptValidationError(["forbidden term: payload"], 3)
     assert isinstance(err, ValueError)
@@ -252,6 +271,7 @@ def test_error_with_no_violations_has_message():
 # ---------------------------------------------------------------------------
 # Retry feedback
 # ---------------------------------------------------------------------------
+
 
 def test_retry_feedback_never_echoes_forbidden_terms_or_values():
     violations = validate_script(
@@ -278,6 +298,7 @@ def test_retry_feedback_only_matching_categories():
 # ---------------------------------------------------------------------------
 # ScriptWriter retry loop (mocked Ollama)
 # ---------------------------------------------------------------------------
+
 
 def _good_json(narr="CVE-2026-12345 is rated high severity."):
     return json.dumps({"scenes": [{"title": "Overview", "narration": narr, "visual_cue": "Diagram"}]})
@@ -434,6 +455,7 @@ def test_markdown_obfuscated_forbidden_term_caught_after_sanitize():
 # Config
 # ---------------------------------------------------------------------------
 
+
 def test_default_settings_and_yaml_have_script_validation():
     sv = DEFAULT_SETTINGS["script_validation"]
     assert sv["enabled"] is True and sv["max_retries"] == 2
@@ -469,6 +491,7 @@ def test_writer_with_no_script_validation_key_uses_safe_behaviour():
 # ---------------------------------------------------------------------------
 # run_pipeline propagation
 # ---------------------------------------------------------------------------
+
 
 class _Fetcher:
     def __init__(self, settings=None):
@@ -516,6 +539,7 @@ def test_validation_error_caught_by_main_entrypoint_exception_tuple():
 # Regression tests for QA-found bugs
 # ---------------------------------------------------------------------------
 
+
 def test_zero_width_space_evasion():
     assert any(x.startswith("forbidden term") for x in check("pay​load"))
 
@@ -532,16 +556,28 @@ def test_version_substring_false_pass():
     assert any(x.startswith("version") for x in check("Fixed in 4.1."))
 
 
-@pytest.mark.parametrize("text", [
-    "rated: critical", "severity level is critical", "severity: critical", "a critical-severity bug",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "rated: critical",
+        "severity level is critical",
+        "severity: critical",
+        "a critical-severity bug",
+    ],
+)
 def test_severity_variants_detected(text):
     assert any(x.startswith("severity") for x in check(text))
 
 
-@pytest.mark.parametrize("text", [
-    "CVSS 3.1 base score 9.8.", "CVSS v3.1 score 9.8", "CVSS 4.0 score of 9.8", "Scored with CVSS v3.1.",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "CVSS 3.1 base score 9.8.",
+        "CVSS v3.1 score 9.8",
+        "CVSS 4.0 score of 9.8",
+        "Scored with CVSS v3.1.",
+    ],
+)
 def test_cvss_version_not_flagged(text):
     assert check(text) == []
 
@@ -558,6 +594,7 @@ def test_soft_hyphen_evasion():
 # Security review fixes (M0, M1, M2, L3, L5)
 # ---------------------------------------------------------------------------
 
+
 def test_m0_bare_cvss_wrong_score_flagged():
     assert any("CVSS score 3.5" in x for x in check("CVSS 3.5"))
 
@@ -567,10 +604,17 @@ def test_m0_real_cvss_versions_exempt(v):
     assert check(f"CVSS {v} base score 9.8.") == []
 
 
-@pytest.mark.parametrize("text", [
-    "CVE‑2025‑9999", "CVE–2025–9999", "CVE−2025−9999",
-    "CVE 2025 9999", "cve_2025_9999", "CVE-2025-9999",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "CVE‑2025‑9999",
+        "CVE–2025–9999",
+        "CVE−2025−9999",
+        "CVE 2025 9999",
+        "cve_2025_9999",
+        "CVE-2025-9999",
+    ],
+)
 def test_m1_invented_cve_variants_flagged(text):
     assert any(x.startswith("CVE id") for x in check(text))
 
@@ -581,10 +625,22 @@ def test_m1_advisory_own_id_variants_ok():
     assert check("CVE‑2025‑29927-SAMPLE", adv) == []
 
 
-@pytest.mark.parametrize("text", [
-    "proof-of-concept", "shell-code", "pay-load", "p a y l o a d", "payloads",
-    "shellcodes", "exploit codes", "weaponized", "weaponization", "pay_load", "Proof of Concept",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "proof-of-concept",
+        "shell-code",
+        "pay-load",
+        "p a y l o a d",
+        "payloads",
+        "shellcodes",
+        "exploit codes",
+        "weaponized",
+        "weaponization",
+        "pay_load",
+        "Proof of Concept",
+    ],
+)
 def test_m2_forbidden_term_variants(text):
     assert any(x.startswith("forbidden term") for x in check(text))
 
@@ -601,6 +657,7 @@ def test_m2_no_false_positive(text):
 
 def test_m2_long_input_is_fast():
     import time
+
     t = time.time()
     check("p " * 20000 + "- " * 20000)
     assert time.time() - t < 5

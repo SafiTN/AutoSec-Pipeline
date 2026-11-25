@@ -1,4 +1,5 @@
 """T12: voiceover and build_video orchestration with fakes (no TTS, no ffmpeg, no real encode)."""
+
 import asyncio
 from pathlib import Path
 
@@ -130,8 +131,7 @@ def test_build_video_slide_mode_assembles_and_closes(tmp_path, patched):
     path, kw = final.write_args
     assert kw["fps"] == 12 and kw["codec"] == "libx264" and kw["audio_codec"] == "aac"
     assert all(c.closed for c in final.clips) and final.closed
-    assert all(c.duration == 1.5 and c.audio.path.endswith(f"scene_{i}.mp3")
-               for i, c in enumerate(final.clips, 1))
+    assert all(c.duration == 1.5 and c.audio.path.endswith(f"scene_{i}.mp3") for i, c in enumerate(final.clips, 1))
     assert len(patched["images"]) == 2 and all(Path(p).is_file() for p in patched["images"])
     assert Path(patched["images"][0]).parent == Path(tmp_path / "slides")
 
@@ -193,7 +193,6 @@ def test_build_video_tts_failure_aborts_without_video(tmp_path, monkeypatch, pat
 
 def test_build_video_long_title_and_bullets_render_real_slide(tmp_path, patched):
     g = CyberMediaGenerator(_settings(tmp_path))
-    scene = {"title": "T" * 600, "narration": "n.", "on_screen_bullets": ["b " * 200] * 5,
-             "key_takeaway": "k " * 300}
+    scene = {"title": "T" * 600, "narration": "n.", "on_screen_bullets": ["b " * 200] * 5, "key_takeaway": "k " * 300}
     g.build_video([scene], "ep.mp4", "CVE-2026-1", None)
     assert Path(patched["images"][0]).stat().st_size > 0

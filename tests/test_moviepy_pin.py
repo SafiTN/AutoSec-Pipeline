@@ -26,8 +26,7 @@ def test_moviepy_installed_major_version_is_2():
     installed_version = importlib.metadata.version("moviepy")
     installed_major = int(installed_version.split(".")[0])
     assert installed_major == 2, (
-        f"requirements.txt pins moviepy>=2.0,<3 but the installed wheel "
-        f"reports version {installed_version!r}"
+        f"requirements.txt pins moviepy>=2.0,<3 but the installed wheel reports version {installed_version!r}"
     )
 
     module_version = getattr(moviepy, "__version__", None)

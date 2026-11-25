@@ -15,7 +15,9 @@ logger = logging.getLogger("AutoSec.JudgeEvaluator")
 class JudgeEvaluator:
     """Objective judge for generated security code, based on sandboxed execution and quality metrics."""
 
-    def __init__(self, scoring_set_path: str = "modules/evaluation/scoring_sets.json", settings: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self, scoring_set_path: str = "modules/evaluation/scoring_sets.json", settings: Optional[Dict[str, Any]] = None
+    ):
         self.scoring_set_path = scoring_set_path
         self.settings = settings or {}
         self.pass_threshold: float = get_harness_config(self.settings)["pass_threshold"]

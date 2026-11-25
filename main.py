@@ -67,9 +67,7 @@ def _read_covered_cves_raw(settings: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
     if not isinstance(loaded, dict):
-        logger.warning(
-            "[Main] covered_cves.json at %s did not contain a JSON object; treating as empty.", path
-        )
+        logger.warning("[Main] covered_cves.json at %s did not contain a JSON object; treating as empty.", path)
         return {}
 
     return loaded
@@ -118,17 +116,13 @@ def _select_primary_advisory(
 
     return max(uncovered, key=lambda item: float(item.get("cvss_score") or 0.0))
 
+
 def _normalize_scenes_for_media(scenes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Ensure the keys build_video expects (e.g. visual_text) are present."""
     normalized: List[Dict[str, Any]] = []
     for idx, sc in enumerate(scenes, start=1):
         item = dict(sc)
-        fallback_visual = (
-            item.get("visual_text")
-            or item.get("visual_cue")
-            or item.get("title")
-            or f"Scene {idx}"
-        )
+        fallback_visual = item.get("visual_text") or item.get("visual_cue") or item.get("title") or f"Scene {idx}"
         item["visual_text"] = str(fallback_visual).strip()
         if "narration" not in item:
             item["narration"] = ""
@@ -137,6 +131,7 @@ def _normalize_scenes_for_media(scenes: List[Dict[str, Any]]) -> List[Dict[str, 
         normalized.append(item)
     return normalized
 
+
 def run_pipeline(
     run_harness: bool = False,
     cve_limit: Optional[int] = None,
@@ -144,9 +139,7 @@ def run_pipeline(
 ) -> Dict[str, Any]:
     """Run the full pipeline: self-check -> fetch CVEs -> write script -> render video."""
     settings = load_settings()
-    effective_cve_limit = (
-        cve_limit if cve_limit is not None else settings.get("nvd", {}).get("max_results", 10)
-    )
+    effective_cve_limit = cve_limit if cve_limit is not None else settings.get("nvd", {}).get("max_results", 10)
 
     harness_summary: Dict[str, Any] = {}
     if run_harness:

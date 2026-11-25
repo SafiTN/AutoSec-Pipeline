@@ -1,4 +1,5 @@
 """Tests for modules/cyber_agent/sandbox_exec.py (T10). Real subprocesses only for tiny safe snippets."""
+
 import importlib
 import logging
 import os
@@ -19,8 +20,7 @@ IMPORTS = ["math", "re", "json", "urllib.parse"]
 def project_root_is_tmp(tmp_path, monkeypatch):
     """work_root must live inside PROJECT_ROOT; point both at tmp_path for tests."""
     monkeypatch.setattr(sandbox_exec, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(
-        sandbox_exec, "resolve_project_path", lambda p: (tmp_path / p).resolve())
+    monkeypatch.setattr(sandbox_exec, "resolve_project_path", lambda p: (tmp_path / p).resolve())
 
 
 def make_executor(tmp_path, **overrides):
@@ -37,8 +37,12 @@ def make_executor(tmp_path, **overrides):
 
 def spec(code, test="", timeout=10, imports=None, task="t"):
     return HarnessSpec(
-        task_id=task, description="d", target_code=code, test_code=test,
-        timeout_sec=timeout, allowed_imports=imports if imports is not None else list(IMPORTS),
+        task_id=task,
+        description="d",
+        target_code=code,
+        test_code=test,
+        timeout_sec=timeout,
+        allowed_imports=imports if imports is not None else list(IMPORTS),
     )
 
 
@@ -53,24 +57,37 @@ def check(ex, code, imports=None):
 
 # ---------- second-pass hardening ----------
 def test_codecs_builtins_bypass_rejected(ex):
-    code = ('import json; b = json.codecs.builtins; m = b.__import__("o"+"s"); '
-            'b.getattr(m, "s"+"ystem")("x")')
+    code = 'import json; b = json.codecs.builtins; m = b.__import__("o"+"s"); b.getattr(m, "s"+"ystem")("x")'
     assert check(ex, code, ["json"])
 
 
-@pytest.mark.parametrize("code", [
-    "x = a.__import__('z')", "x = a.getattr(b, 'c')", "a.setattr(b, 'c', 1)",
-    "a.delattr(b, 'c')", "x = a.builtins", "x = a.codecs", "x = a.importlib",
-    "x = a.sys", "x = a.os",
-])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "x = a.__import__('z')",
+        "x = a.getattr(b, 'c')",
+        "a.setattr(b, 'c', 1)",
+        "a.delattr(b, 'c')",
+        "x = a.builtins",
+        "x = a.codecs",
+        "x = a.importlib",
+        "x = a.sys",
+        "x = a.os",
+    ],
+)
 def test_banned_attribute_names(ex, code):
     assert check(ex, code)
 
 
-@pytest.mark.parametrize("code", [
-    "x = 'o' + 's'", "x = 'sy' + 'st' + 'em'", "x = ('__imp' + 'ort__')",
-    "x = 'sub' + 'process'",
-])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "x = 'o' + 's'",
+        "x = 'sy' + 'st' + 'em'",
+        "x = ('__imp' + 'ort__')",
+        "x = 'sub' + 'process'",
+    ],
+)
 def test_constant_concat_folded(ex, code):
     assert any("Forbidden string constant" in v for v in check(ex, code))
 
@@ -91,15 +108,27 @@ def test_apply_interrupt_kills_child(ex, monkeypatch):
 
     class FakeProc:
         pid = 1
-        def wait(self, timeout=None): return 0
-        def kill(self): killed.append("proc")
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            killed.append("proc")
 
     class FakeLimits:
         popen_kwargs = {}
-        def __init__(self, *a, **k): pass
-        def apply(self, proc): raise KeyboardInterrupt
-        def kill(self, proc): killed.append("limits")
-        def release(self): killed.append("release")
+
+        def __init__(self, *a, **k):
+            pass
+
+        def apply(self, proc):
+            raise KeyboardInterrupt
+
+        def kill(self, proc):
+            killed.append("limits")
+
+        def release(self):
+            killed.append("release")
 
     monkeypatch.setattr(sandbox_exec, "_OSLimits", FakeLimits)
     monkeypatch.setattr(sandbox_exec.subprocess, "Popen", lambda *a, **k: FakeProc())
@@ -155,10 +184,21 @@ def test_aliased_os_system_rejected(ex):
     assert any("system" in x for x in v)
 
 
-@pytest.mark.parametrize("code", [
-    "getattr(1, 'x')", "globals()", "locals()", "vars()", "eval('1')", "exec('1')",
-    "open('f')", "__import__('os')", "x = __builtins__", "().__class__.__subclasses__()",
-])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "getattr(1, 'x')",
+        "globals()",
+        "locals()",
+        "vars()",
+        "eval('1')",
+        "exec('1')",
+        "open('f')",
+        "__import__('os')",
+        "x = __builtins__",
+        "().__class__.__subclasses__()",
+    ],
+)
 def test_dangerous_builtins_rejected(ex, code):
     assert check(ex, code)
 
@@ -203,13 +243,15 @@ def test_runtime_socket_block_in_real_child(tmp_path):
     """Allow socket in allowlist bypassing static check by patching it; child must still fail to connect."""
     exe = make_executor(tmp_path)
     exe.static_security_check = lambda code, allowed: []
-    r = exe.execute(spec(
-        "import socket\n"
-        "try:\n"
-        "    socket.create_connection(('127.0.0.1', 9), timeout=1)\n"
-        "except OSError as e:\n"
-        "    print('BLOCKED', e)\n"
-    ))
+    r = exe.execute(
+        spec(
+            "import socket\n"
+            "try:\n"
+            "    socket.create_connection(('127.0.0.1', 9), timeout=1)\n"
+            "except OSError as e:\n"
+            "    print('BLOCKED', e)\n"
+        )
+    )
     assert "BLOCKED" in r["stdout"] and "disabled in the sandbox" in r["stdout"], r
 
 
@@ -270,26 +312,42 @@ def test_cleanup_idempotent(ex):
 
 # ---------- config ----------
 def test_invalid_config_falls_back_with_warning(tmp_path, caplog):
-    bad = {"sandbox": {"timeout_sec": -1, "max_memory_mb": "lots", "max_output_bytes": True,
-                       "max_processes": 0, "work_root": ""}}
+    bad = {
+        "sandbox": {
+            "timeout_sec": -1,
+            "max_memory_mb": "lots",
+            "max_output_bytes": True,
+            "max_processes": 0,
+            "work_root": "",
+        }
+    }
     with caplog.at_level(logging.WARNING, logger="AutoSec.SandboxExec"):
         ex = SandboxExecutor(bad)
     from core.config_loader import DEFAULT_SETTINGS
+
     assert ex.cfg == DEFAULT_SETTINGS["sandbox"]
     assert len(caplog.records) >= 5
 
 
 def test_non_dict_sandbox_section_uses_defaults():
     from core.config_loader import DEFAULT_SETTINGS
+
     assert SandboxExecutor({"sandbox": "nope"}).cfg == DEFAULT_SETTINGS["sandbox"]
     assert SandboxExecutor().cfg == DEFAULT_SETTINGS["sandbox"]
 
 
 def test_settings_yaml_has_sandbox_section():
     from core.config_loader import load_settings
+
     s = load_settings()["sandbox"]
-    assert set(s) >= {"timeout_sec", "max_memory_mb", "max_output_bytes", "max_processes",
-                      "work_root", "allow_unlimited"}
+    assert set(s) >= {
+        "timeout_sec",
+        "max_memory_mb",
+        "max_output_bytes",
+        "max_processes",
+        "work_root",
+        "allow_unlimited",
+    }
     assert s["allow_unlimited"] is False
 
 
@@ -343,49 +401,56 @@ def test_posix_timeout_kills_process_group(tmp_path):
 
 
 # ---------- security review findings ----------
-@pytest.mark.parametrize("code", [
-    "import os.path\nos.sys.modules['subprocess']",
-    "import os.path\nos.path.sys.modules",
-    "import os.path\nos.remove('x')",
-    "import os.path\nos.open('x', 0)",
-    "import os.path\nos.environ",
-    "import os.path\nos.listdir('.')",
-    "import os.path\nos.replace('a', 'b')",
-    "import os.path\nos.kill(1, 9)",
-    "import os.path\nos.makedirs('d')",
-    "import os\nos.getcwd()",
-    "from os import remove",
-    "from os import path",
-    "f = lambda: 0\nf.__globals__",
-    "f = lambda: 0\nf.__code__",
-    "x = ().__class__.__bases__",
-    "x = (1).__class__.__mro__",
-    "x = {}.__dict__",
-    "x = {'__globals__': 1}",
-    "d = {}\nd['__builtins__']",
-    "x = 'system'",
-    "x = 'subprocess'",
-    "x = 'environ'",
-    "x = 'open'",
-    "x = '__subclasses__'",
-])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import os.path\nos.sys.modules['subprocess']",
+        "import os.path\nos.path.sys.modules",
+        "import os.path\nos.remove('x')",
+        "import os.path\nos.open('x', 0)",
+        "import os.path\nos.environ",
+        "import os.path\nos.listdir('.')",
+        "import os.path\nos.replace('a', 'b')",
+        "import os.path\nos.kill(1, 9)",
+        "import os.path\nos.makedirs('d')",
+        "import os\nos.getcwd()",
+        "from os import remove",
+        "from os import path",
+        "f = lambda: 0\nf.__globals__",
+        "f = lambda: 0\nf.__code__",
+        "x = ().__class__.__bases__",
+        "x = (1).__class__.__mro__",
+        "x = {}.__dict__",
+        "x = {'__globals__': 1}",
+        "d = {}\nd['__builtins__']",
+        "x = 'system'",
+        "x = 'subprocess'",
+        "x = 'environ'",
+        "x = 'open'",
+        "x = '__subclasses__'",
+    ],
+)
 def test_review_bypasses_rejected(ex, code):
     assert check(ex, code, imports=["os.path", "math"])
 
 
-@pytest.mark.parametrize("code", [
-    "x = 'a-b'.replace('-', '_')",
-    "x = [1]\nx.remove(1)",
-    "x = b'a'.decode('utf-8', errors='replace')",
-    "x = 'http'",
-    "import os.path\nx = os.path.abspath('.')",
-])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "x = 'a-b'.replace('-', '_')",
+        "x = [1]\nx.remove(1)",
+        "x = b'a'.decode('utf-8', errors='replace')",
+        "x = 'http'",
+        "import os.path\nx = os.path.abspath('.')",
+    ],
+)
 def test_review_legit_code_still_allowed(ex, code):
     assert check(ex, code, imports=["os.path"]) == []
 
 
 def test_bare_os_not_in_defaults():
     import json
+
     assert "os" not in HarnessSpec(task_id="t", description="d", target_code="").allowed_imports
     sets = json.loads((REPO_ROOT / "modules/evaluation/scoring_sets.json").read_text(encoding="utf-8"))
     for task in sets["tasks"]:
@@ -396,6 +461,7 @@ def test_bare_os_not_in_defaults():
 
 def test_scoring_set_path_traversal_test_passes_static_check(ex):
     import json
+
     sets = json.loads((REPO_ROOT / "modules/evaluation/scoring_sets.json").read_text(encoding="utf-8"))
     task = sets["tasks"][0]
     assert check(ex, task["test_code"], imports=task["allowed_imports"]) == []
@@ -417,8 +483,7 @@ class _FakeProc:
 
 def _fail_apply(monkeypatch, proc):
     monkeypatch.setattr(sandbox_exec.subprocess, "Popen", lambda *a, **k: proc)
-    monkeypatch.setattr(
-        sandbox_exec._OSLimits, "apply", lambda self, p: "OS limits unavailable: boom")
+    monkeypatch.setattr(sandbox_exec._OSLimits, "apply", lambda self, p: "OS limits unavailable: boom")
     monkeypatch.setattr(sandbox_exec._OSLimits, "kill", lambda self, p: p.kill())
     monkeypatch.setattr(sandbox_exec._OSLimits, "resume", lambda self, p: None)
 
@@ -458,6 +523,7 @@ def test_windows_job_limits_applied_before_resume(ex):
 @pytest.mark.parametrize("bad", ["..", "../outside", ".", "/"])
 def test_work_root_outside_or_equal_project_root_rejected(tmp_path, caplog, bad):
     from core.config_loader import DEFAULT_SETTINGS
+
     with caplog.at_level(logging.WARNING, logger="AutoSec.SandboxExec"):
         ex = make_executor(tmp_path, work_root=bad)
     assert ex.cfg["work_root"] == DEFAULT_SETTINGS["sandbox"]["work_root"]
@@ -496,18 +562,20 @@ def test_fsize_limit_uses_output_cap(tmp_path, monkeypatch):
 def test_runtime_guard_patches_bind_sendto_and_underscore_socket(tmp_path):
     exe = make_executor(tmp_path)
     exe.static_security_check = lambda code, allowed: []
-    r = exe.execute(spec(
-        "import socket, _socket\n"
-        "s = socket.socket.__new__(socket.socket)\n"
-        "for name in ('bind', 'sendto'):\n"
-        "    try:\n"
-        "        getattr(s, name)(('127.0.0.1', 0))\n"
-        "    except OSError:\n"
-        "        print('BLOCKED', name)\n"
-        "try:\n"
-        "    _socket.socket()\n"
-        "except OSError:\n"
-        "    print('BLOCKED _socket')\n"
-    ))
+    r = exe.execute(
+        spec(
+            "import socket, _socket\n"
+            "s = socket.socket.__new__(socket.socket)\n"
+            "for name in ('bind', 'sendto'):\n"
+            "    try:\n"
+            "        getattr(s, name)(('127.0.0.1', 0))\n"
+            "    except OSError:\n"
+            "        print('BLOCKED', name)\n"
+            "try:\n"
+            "    _socket.socket()\n"
+            "except OSError:\n"
+            "    print('BLOCKED _socket')\n"
+        )
+    )
     assert "BLOCKED bind" in r["stdout"] and "BLOCKED sendto" in r["stdout"], r
     assert "BLOCKED _socket" in r["stdout"], r

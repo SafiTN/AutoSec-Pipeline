@@ -10,6 +10,7 @@ are all replaced with stubs/mocks so no real config file, NVD, Ollama or
 Edge-TTS/MoviePy work happens. Follows the stub style already used in
 tests/test_main_sample_fallback.py.
 """
+
 from unittest.mock import MagicMock
 
 import main
@@ -35,8 +36,7 @@ class _StubMediaGenerator:
     def __init__(self, settings=None):
         self.settings = settings
 
-    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None,
-                    severity=None, is_sample=False):
+    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None, severity=None, is_sample=False):
         return None
 
 
@@ -75,7 +75,9 @@ def test_run_pipeline_explicit_cve_limit_overrides_nvd_default_limit(monkeypatch
     """An explicit cve_limit must win over nvd.max_results (not be ignored)."""
     monkeypatch.chdir(tmp_path)
 
-    monkeypatch.setattr(main, "load_settings", lambda: _fake_settings(tmp_path / "output", default_limit=9, max_results=9))
+    monkeypatch.setattr(
+        main, "load_settings", lambda: _fake_settings(tmp_path / "output", default_limit=9, max_results=9)
+    )
 
     mock_fetcher_instance = MagicMock()
     mock_fetcher_instance.fetch_latest_cves.return_value = [dict(FALLBACK_ADVISORIES[0])]

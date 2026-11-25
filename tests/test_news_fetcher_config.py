@@ -16,6 +16,7 @@ Covers backlog item T02 AC:
   e. main.run_pipeline(cve_limit=None) forwards nvd.default_limit to
      fetch_latest_cves(limit=...).
 """
+
 import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
@@ -71,10 +72,9 @@ def _advisory_entry(cve_id: str):
 # AC a: __init__ reads lookback_days/max_results/default_limit, with defaults.
 # ---------------------------------------------------------------------------
 
+
 def test_init_reads_lookback_max_results_default_limit_from_settings():
-    fetcher = NewsFetcher(
-        settings=_settings(lookback_days=7, max_results=5, default_limit=2)
-    )
+    fetcher = NewsFetcher(settings=_settings(lookback_days=7, max_results=5, default_limit=2))
     assert fetcher.lookback_days == 7
     assert fetcher.max_results == 5
     assert fetcher.default_limit == 2
@@ -105,6 +105,7 @@ def test_init_defaults_when_settings_dict_has_no_nvd_key():
 # AC b: custom lookback_days changes the pubStartDate query param.
 # ---------------------------------------------------------------------------
 
+
 def test_custom_lookback_days_changes_pub_start_date(monkeypatch):
     captured = {}
 
@@ -120,9 +121,7 @@ def test_custom_lookback_days_changes_pub_start_date(monkeypatch):
     after = datetime.now(timezone.utc)
 
     query = parse_qs(urlparse(captured["url"]).query)
-    pub_start = datetime.strptime(query["pubStartDate"][0], "%Y-%m-%dT00:00:00.000Z").replace(
-        tzinfo=timezone.utc
-    )
+    pub_start = datetime.strptime(query["pubStartDate"][0], "%Y-%m-%dT00:00:00.000Z").replace(tzinfo=timezone.utc)
 
     # Expected window is "now - 7 days" at midnight granularity; allow for the
     # test running right across a day boundary by bracketing with before/after.
@@ -137,6 +136,7 @@ def test_custom_lookback_days_changes_pub_start_date(monkeypatch):
 # ---------------------------------------------------------------------------
 # AC c: custom max_results caps resultsPerPage even with a larger explicit limit.
 # ---------------------------------------------------------------------------
+
 
 def test_custom_max_results_caps_results_per_page_even_with_larger_limit(monkeypatch):
     captured = {}
@@ -173,6 +173,7 @@ def test_default_max_results_allows_up_to_ten_when_no_cap_given(monkeypatch):
 # ---------------------------------------------------------------------------
 # AC d: fetch_latest_cves() with no limit argument uses default_limit end to end.
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_latest_cves_no_limit_uses_default_limit_for_request_and_parsing(monkeypatch):
     captured = {}

@@ -157,14 +157,16 @@ Structure the {safe_scenes} scenes logically from vulnerability overview and roo
             ("CVE id", "Mention only the CVE ID given in the advisory."),
             ("severity", "State the severity exactly as given in the advisory, or omit severity claims."),
             ("CVSS", "State the CVSS score exactly as given in the advisory."),
-            ("version", "Do not mention version numbers unless they appear in the advisory; say \"not yet specified\" instead."),
-            ("forbidden term", "Keep the content strictly defensive: no exploit material, attack tooling or step-by-step attack instructions."),
+            (
+                "version",
+                'Do not mention version numbers unless they appear in the advisory; say "not yet specified" instead.',
+            ),
+            (
+                "forbidden term",
+                "Keep the content strictly defensive: no exploit material, attack tooling or step-by-step attack instructions.",
+            ),
         ]
-        lines = [
-            hint
-            for prefix, hint in categories
-            if any(v.startswith(prefix) for v in violations)
-        ]
+        lines = [hint for prefix, hint in categories if any(v.startswith(prefix) for v in violations)]
         if not lines:
             lines = ["Use advisory facts only."]
         body = "\n".join(f"- {line}" for line in lines)
@@ -194,9 +196,7 @@ Structure the {safe_scenes} scenes logically from vulnerability overview and roo
             additions.append(f"Evaluator feedback to address:\n{self.clean_text(feedback)}")
 
         if extra_constraints:
-            formatted_constraints = "\n".join(
-                f"- {self.clean_text(c)}" for c in extra_constraints if c and c.strip()
-            )
+            formatted_constraints = "\n".join(f"- {self.clean_text(c)}" for c in extra_constraints if c and c.strip())
             if formatted_constraints:
                 additions.append(f"Additional constraints:\n{formatted_constraints}")
 

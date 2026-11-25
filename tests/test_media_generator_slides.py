@@ -1,4 +1,5 @@
 """T08 slide redesign tests: fonts, wrapping, layout, badges. No network/TTS/encode."""
+
 import sys
 from pathlib import Path
 
@@ -75,8 +76,7 @@ def test_empty_font_path_falls_back():
 def test_render_with_missing_fonts_still_works(tmp_path):
     slide = {"fonts": {"regular": "nope/a.ttf", "bold": "nope/b.ttf", "mono": ""}}
     g = CyberMediaGenerator(make_settings(tmp_path, slide=slide))
-    p = g.render_smart_scene_slide(tmp_path / "s.png", 1, "Title", "cue",
-                                   bullets=["a"], key_takeaway="t")
+    p = g.render_smart_scene_slide(tmp_path / "s.png", 1, "Title", "cue", bullets=["a"], key_takeaway="t")
     assert p.is_file()
 
 
@@ -126,9 +126,16 @@ def test_wrap_empty_and_none():
 @pytest.mark.parametrize("w,h", [(1280, 720), (960, 540), (1920, 1080)])
 def test_png_created_with_size(tmp_path, w, h):
     g = CyberMediaGenerator(make_settings(tmp_path, w, h))
-    p = g.render_smart_scene_slide(tmp_path / "x" / "a.png", 2, "Title", "",
-                                   cve_id="CVE-2026-1", severity="HIGH",
-                                   bullets=["one"], key_takeaway="take")
+    p = g.render_smart_scene_slide(
+        tmp_path / "x" / "a.png",
+        2,
+        "Title",
+        "",
+        cve_id="CVE-2026-1",
+        severity="HIGH",
+        bullets=["one"],
+        key_takeaway="take",
+    )
     with Image.open(p) as im:
         assert im.size == (w, h)
 
@@ -141,8 +148,7 @@ def test_legacy_three_key_scene_renders_visual_cue_as_body(gen, tmp_path, spy):
 
 
 def test_bullets_capped_at_three(gen, tmp_path, spy):
-    gen.render_smart_scene_slide(tmp_path / "b.png", 2, "T", "cue",
-                                 bullets=["B1", "B2", "B3", "B4", "B5"])
+    gen.render_smart_scene_slide(tmp_path / "b.png", 2, "T", "cue", bullets=["B1", "B2", "B3", "B4", "B5"])
     texts = [t for _, t, _ in spy]
     assert all(b in texts for b in ("B1", "B2", "B3"))
     assert "B4" not in texts and "B5" not in texts
@@ -155,8 +161,7 @@ def test_visual_cue_ignored_when_bullets_present(gen, tmp_path, spy):
 
 def test_visual_cue_label_never_drawn(gen, tmp_path, spy):
     gen.render_smart_scene_slide(tmp_path / "1.png", 1, "T", "cue")
-    gen.render_smart_scene_slide(tmp_path / "2.png", 2, "Patch now", "cue",
-                                 bullets=["a"], key_takeaway="k")
+    gen.render_smart_scene_slide(tmp_path / "2.png", 2, "Patch now", "cue", bullets=["a"], key_takeaway="k")
     gen.visual_mode = "other"
     gen._create_cyber_slide("T", "content", str(tmp_path / "3.png"))
     gen._create_cyber_slide("T", "content", str(tmp_path / "4.png"), is_code=True)
@@ -176,8 +181,7 @@ def test_severity_badge_mapping():
 
 
 def test_badge_text_drawn(gen, tmp_path, spy):
-    gen.render_smart_scene_slide(tmp_path / "a.png", 1, "T", "", cve_id="CVE-2026-9999",
-                                 severity="critical")
+    gen.render_smart_scene_slide(tmp_path / "a.png", 1, "T", "", cve_id="CVE-2026-9999", severity="critical")
     texts = [t for _, t, _ in spy]
     assert "CVE-2026-9999" in texts
     assert "SEVERITY: CRITICAL" in texts
@@ -197,9 +201,15 @@ def test_no_text_overflows_card(tmp_path, spy, w, h):
     scale = min(w / 1280, h / 720)
     margin = int(48 * scale)
     g.render_smart_scene_slide(
-        tmp_path / "o.png", 2, LONG + LONG_TOKEN, "",
-        cve_id="CVE-2026-12345", severity="HIGH",
-        bullets=[LONG, LONG_TOKEN, LONG, "extra"], key_takeaway=LONG)
+        tmp_path / "o.png",
+        2,
+        LONG + LONG_TOKEN,
+        "",
+        cve_id="CVE-2026-12345",
+        severity="HIGH",
+        bullets=[LONG, LONG_TOKEN, LONG, "extra"],
+        key_takeaway=LONG,
+    )
     assert spy
     for (x, y), text, font in spy:
         left, t, r, b = font.getbbox(text)
@@ -221,8 +231,7 @@ def test_build_video_passes_scene_keys(tmp_path, monkeypatch):
 
     monkeypatch.setattr(g, "_generate_voiceover", fake_tts)
     monkeypatch.setattr(g, "render_smart_scene_slide", fake_render)
-    scene = {"title": "T", "narration": "n", "visual_cue": "v",
-             "on_screen_bullets": ["a"], "key_takeaway": "k"}
+    scene = {"title": "T", "narration": "n", "visual_cue": "v", "on_screen_bullets": ["a"], "key_takeaway": "k"}
     with pytest.raises(RuntimeError):
         g.build_video([scene], "x.mp4", "CVE-2026-1", "HIGH")
     assert captured["bullets"] == ["a"]
@@ -241,8 +250,15 @@ def _render(gen, **kw):
     _SLIDE_N[0] += 1
     out = Path(gen.slides_dir if hasattr(gen, "slides_dir") else ".") / f"s{_SLIDE_N[0]}.png"
     return gen.render_smart_scene_slide(
-        out, 1, "T", "v", cve_id="CVE-2026-1",
-        severity="HIGH", bullets=["a"], key_takeaway="k", **kw,
+        out,
+        1,
+        "T",
+        "v",
+        cve_id="CVE-2026-1",
+        severity="HIGH",
+        bullets=["a"],
+        key_takeaway="k",
+        **kw,
     )
 
 
@@ -285,6 +301,7 @@ def test_build_video_forwards_is_sample(tmp_path, monkeypatch, flag):
     monkeypatch.setattr(g, "_generate_voiceover", fake_tts)
     monkeypatch.setattr(g, "render_smart_scene_slide", fake_render)
     with pytest.raises(RuntimeError):
-        g.build_video([{"title": "T", "narration": "n", "visual_cue": "v"}], "x.mp4",
-                      "CVE-2026-1", "HIGH", is_sample=flag)
+        g.build_video(
+            [{"title": "T", "narration": "n", "visual_cue": "v"}], "x.mp4", "CVE-2026-1", "HIGH", is_sample=flag
+        )
     assert captured["is_sample"] is flag

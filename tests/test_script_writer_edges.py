@@ -1,4 +1,5 @@
 """T12: ScriptWriter edge cases (Ollama mocked; offline)."""
+
 import json
 import logging
 
@@ -13,8 +14,17 @@ ADV = {
     "cvss_score": 8.1,
     "summary": "Improper input validation in Foo allows denial of service.",
 }
-GOOD = {"scenes": [{"title": "T", "narration": "CVE-2026-12345 is rated high severity.",
-                    "key_takeaway": "Patch.", "on_screen_bullets": ["a"], "visual_cue": "v"}]}
+GOOD = {
+    "scenes": [
+        {
+            "title": "T",
+            "narration": "CVE-2026-12345 is rated high severity.",
+            "key_takeaway": "Patch.",
+            "on_screen_bullets": ["a"],
+            "visual_cue": "v",
+        }
+    ]
+}
 extract = ScriptWriter._extract_json_payload
 
 
@@ -31,8 +41,9 @@ def _writer(queue, **rules):
     return w
 
 
-@pytest.mark.parametrize("raw", [None, "", "not json at all", "[1, 2]", '{"scenes": "x"}',
-                                 '{"other": []}', 'prose {broken: json} prose'])
+@pytest.mark.parametrize(
+    "raw", [None, "", "not json at all", "[1, 2]", '{"scenes": "x"}', '{"other": []}', "prose {broken: json} prose"]
+)
 def test_extract_rejects_garbage(raw):
     assert extract(raw) is None
 
@@ -122,9 +133,15 @@ def test_normalize_long_title_bullets_and_junk():
     w = ScriptWriter(settings={})
     long = "word " * 200
     scenes = normalize_scenes(
-        [{"title": long, "narration": "Narration here.", "on_screen_bullets": [long] * 10 + [5, None]},
-         "junk", {"narration": 5}, {"narration": "   "}],
-        5, w.optimizer)
+        [
+            {"title": long, "narration": "Narration here.", "on_screen_bullets": [long] * 10 + [5, None]},
+            "junk",
+            {"narration": 5},
+            {"narration": "   "},
+        ],
+        5,
+        w.optimizer,
+    )
     assert len(scenes) == 1
     sc = scenes[0]
     assert len(sc["on_screen_bullets"]) <= w.optimizer.max_bullets

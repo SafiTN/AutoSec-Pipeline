@@ -2,6 +2,7 @@
 
 Fully offline; the Ollama call is replaced by a scripted fake.
 """
+
 import json
 
 import pytest
@@ -30,13 +31,19 @@ def opt(**kw):
 
 
 def sc(**kw):
-    base = {"title": "T", "narration": "CVE-2026-12345 is rated high severity.",
-            "key_takeaway": "Patch soon.", "on_screen_bullets": ["a", "b"], "visual_cue": "v"}
+    base = {
+        "title": "T",
+        "narration": "CVE-2026-12345 is rated high severity.",
+        "key_takeaway": "Patch soon.",
+        "on_screen_bullets": ["a", "b"],
+        "visual_cue": "v",
+    }
     base.update(kw)
     return base
 
 
 # --- prompt rules -----------------------------------------------------------
+
 
 def test_system_prompt_rules_present():
     p = opt().build_script_prompts(ADVISORY)["system_prompt"]
@@ -62,6 +69,7 @@ def test_prompt_uses_configured_limits():
 
 
 # --- select_hook_style ------------------------------------------------------
+
 
 def test_hook_deterministic_and_case_insensitive():
     o = opt()
@@ -118,6 +126,7 @@ def test_numeric_config_clamped():
 
 # --- normalize_scenes -------------------------------------------------------
 
+
 def test_bullet_cap_three():
     out = normalize_scenes([sc(on_screen_bullets=list("abcdef"))], 3, opt())
     assert out[0]["on_screen_bullets"] == ["a", "b", "c"]
@@ -169,11 +178,20 @@ def test_scene_count_cap_and_zero():
     assert normalize_scenes([sc()], 0, opt()) == []
 
 
-@pytest.mark.parametrize("garbage", [
-    None, 5, "str", {}, [None, 1, "x", [], {}], [{"narration": 5}], [{"narration": "  "}],
-    [{"narration": "ok", "key_takeaway": 7, "on_screen_bullets": 9, "title": [], "visual_cue": {}}],
-    [{"narration": "ok", "on_screen_bullets": {"a": 1}}],
-])
+@pytest.mark.parametrize(
+    "garbage",
+    [
+        None,
+        5,
+        "str",
+        {},
+        [None, 1, "x", [], {}],
+        [{"narration": 5}],
+        [{"narration": "  "}],
+        [{"narration": "ok", "key_takeaway": 7, "on_screen_bullets": 9, "title": [], "visual_cue": {}}],
+        [{"narration": "ok", "on_screen_bullets": {"a": 1}}],
+    ],
+)
 def test_garbage_never_raises(garbage):
     out = normalize_scenes(garbage, 3, opt())
     assert isinstance(out, list)
@@ -189,11 +207,12 @@ def test_unicode_whitespace_tricks():
 
 
 def test_bullet_truncation_never_overflows_with_emoji():
-    out = normalize_scenes([sc(on_screen_bullets=["\U0001F600" * 100])], 3, opt())
+    out = normalize_scenes([sc(on_screen_bullets=["\U0001f600" * 100])], 3, opt())
     assert len(out[0]["on_screen_bullets"][0]) <= 48
 
 
 # --- validator integration --------------------------------------------------
+
 
 def make_writer(responses, **val):
     s = settings()
@@ -213,15 +232,18 @@ def payload(**kw):
     return json.dumps({"scenes": [sc(**kw)]})
 
 
-@pytest.mark.parametrize("field,value", [
-    ("on_screen_bullets", ["Use this payload"]),
-    ("key_takeaway", "Run the payload now."),
-    ("on_screen_bullets", ["CVE-2020-0001"]),
-    ("key_takeaway", "See CVE-2020-0001."),
-    ("on_screen_bullets", ["CVSS 4.3"]),
-    ("key_takeaway", "CVSS score of 5.5 overall."),
-    ("on_screen_bullets", ["Critical severity"]),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("on_screen_bullets", ["Use this payload"]),
+        ("key_takeaway", "Run the payload now."),
+        ("on_screen_bullets", ["CVE-2020-0001"]),
+        ("key_takeaway", "See CVE-2020-0001."),
+        ("on_screen_bullets", ["CVSS 4.3"]),
+        ("key_takeaway", "CVSS score of 5.5 overall."),
+        ("on_screen_bullets", ["Critical severity"]),
+    ],
+)
 def test_invented_content_in_extras_rejected(field, value):
     w, calls = make_writer([payload(**{field: value})] * 3, max_retries=0)
     with pytest.raises(ScriptValidationError):
@@ -269,6 +291,7 @@ def test_validation_disabled_still_returns_prompt_version():
 
 # --- fallback ---------------------------------------------------------------
 
+
 def test_fallback_emits_new_keys_and_passes_validation():
     w, calls = make_writer(["garbage"] * 5, max_retries=1)
     out = w.generate_episode_script(ADVISORY, max_scenes=3)
@@ -281,9 +304,11 @@ def test_fallback_emits_new_keys_and_passes_validation():
 
 # --- security review follow-ups ---------------------------------------------
 
+
 def test_cf_chars_stripped_from_all_fields():
-    raw = sc(title="Ti‮tle", narration="Hel​lo there.", key_takeaway="Pa​tch.",
-             on_screen_bullets=["Bu‮llet"], visual_cue="V​C")
+    raw = sc(
+        title="Ti‮tle", narration="Hel​lo there.", key_takeaway="Pa​tch.", on_screen_bullets=["Bu‮llet"], visual_cue="V​C"
+    )
     out = normalize_scenes([raw], 3, opt())[0]
     assert "‮" not in json.dumps(out, ensure_ascii=False)
     assert "​" not in json.dumps(out, ensure_ascii=False)
@@ -302,9 +327,20 @@ def test_cve_id_split_across_bullets_rejected():
         w.generate_episode_script(ADVISORY)
 
 
-@pytest.mark.parametrize("val,expected", [
-    ("false", False), ("No", False), ("0", False), ("off", False), (False, False),
-    ("true", True), ("on", True), (True, True), (None, True), ("weird", True),
-])
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        ("false", False),
+        ("No", False),
+        ("0", False),
+        ("off", False),
+        (False, False),
+        ("true", True),
+        ("on", True),
+        (True, True),
+        (None, True),
+        ("weird", True),
+    ],
+)
 def test_hook_rotation_bool_parsing(val, expected):
     assert opt(hook_rotation=val).hook_rotation is expected

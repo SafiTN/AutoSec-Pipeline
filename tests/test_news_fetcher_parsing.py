@@ -1,4 +1,5 @@
 """T12: NewsFetcher NVD payload parsing and request construction (offline, urlopen mocked)."""
+
 import json
 from urllib.parse import parse_qs, urlparse
 
@@ -34,20 +35,26 @@ def _parse(vulns, limit=10):
 
 
 def test_realistic_payload_parsed():
-    out = _parse([_cve(
-        descs=[{"lang": "es", "value": "hola"}, {"lang": "en", "value": "  English text.  "}],
-        metrics={"cvssMetricV31": _metric(9.8, "CRITICAL")},
-        refs=[{"url": "https://vendor.example/adv"}],
-    )])
-    assert out == [{
-        "cve_id": "CVE-2026-1000",
-        "published": "2026-01-02T03:04:05.000",
-        "severity": "CRITICAL",
-        "cvss_score": 9.8,
-        "summary": "English text.",
-        "reference_url": "https://vendor.example/adv",
-        "is_sample": False,
-    }]
+    out = _parse(
+        [
+            _cve(
+                descs=[{"lang": "es", "value": "hola"}, {"lang": "en", "value": "  English text.  "}],
+                metrics={"cvssMetricV31": _metric(9.8, "CRITICAL")},
+                refs=[{"url": "https://vendor.example/adv"}],
+            )
+        ]
+    )
+    assert out == [
+        {
+            "cve_id": "CVE-2026-1000",
+            "published": "2026-01-02T03:04:05.000",
+            "severity": "CRITICAL",
+            "cvss_score": 9.8,
+            "summary": "English text.",
+            "reference_url": "https://vendor.example/adv",
+            "is_sample": False,
+        }
+    ]
 
 
 def test_cvss_preference_v40_over_v31_over_v30():
@@ -57,7 +64,9 @@ def test_cvss_preference_v40_over_v31_over_v30():
     allthree = dict(both, cvssMetricV40=_metric(9.0, "CRITICAL"))
     assert f._extract_cvss_info({"metrics": allthree})["cvss_score"] == 9.0
     assert f._extract_cvss_info({"metrics": {"cvssMetricV30": _metric(5.0, "medium")}}) == {
-        "cvss_score": 5.0, "severity": "MEDIUM"}
+        "cvss_score": 5.0,
+        "severity": "MEDIUM",
+    }
 
 
 def test_v2_only_and_missing_metrics_give_unknown_none():
@@ -135,8 +144,9 @@ def test_request_params_headers_timeout(monkeypatch):
         return _Resp(json.dumps({"vulnerabilities": [_cve()]}).encode())
 
     monkeypatch.setattr(nf, "urlopen", fake_urlopen)
-    fetcher = NewsFetcher({"nvd": {"api_url": "https://example.invalid/x", "timeout_sec": 7,
-                                   "max_results": 5, "lookback_days": 3}})
+    fetcher = NewsFetcher(
+        {"nvd": {"api_url": "https://example.invalid/x", "timeout_sec": 7, "max_results": 5, "lookback_days": 3}}
+    )
     assert len(fetcher.fetch_latest_cves(limit=99)) == 1
     parsed = urlparse(seen["url"])
     q = parse_qs(parsed.query)

@@ -1,4 +1,5 @@
 """T11: config-driven harness keys. All mocked: no network, no Ollama, no real sandbox."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,15 +8,7 @@ from core.config_loader import get_harness_config
 from core.harness_loop import AutoHarnessLoop
 from modules.evaluation.judge_evaluator import JudgeEvaluator
 
-CODE = (
-    "```python\n"
-    "def f(x):\n"
-    '    """doc"""\n'
-    "    if x:\n"
-    "        return x\n"
-    "    return 0\n"
-    "```"
-)
+CODE = '```python\ndef f(x):\n    """doc"""\n    if x:\n        return x\n    return 0\n```'
 TASK = {"task_id": "t1", "prompt": "do it", "category": "c"}
 
 
@@ -24,6 +17,7 @@ def _h(**kw):
 
 
 # ---- get_harness_config ----
+
 
 def test_defaults():
     for s in (None, {}, {"harness": None}):
@@ -45,9 +39,7 @@ def test_bad_max_iterations(bad):
 
 
 @pytest.mark.parametrize("key", ["pass_threshold", "target_score"])
-@pytest.mark.parametrize(
-    "bad", [True, "80", None, float("nan"), float("inf"), -float("inf")]
-)
+@pytest.mark.parametrize("bad", [True, "80", None, float("nan"), float("inf"), -float("inf")])
 def test_non_number_scores(key, bad):
     with pytest.raises(ValueError):
         get_harness_config(_h(**{key: bad}))
@@ -72,6 +64,7 @@ def test_boundaries_ok(pt, ts):
 
 # ---- harness loop ----
 
+
 def _loop(max_iter, target, reports):
     settings = _h(max_iterations=max_iter, target_score=target, pass_threshold=0)
     loop = AutoHarnessLoop(settings=settings)
@@ -83,8 +76,7 @@ def _loop(max_iter, target, reports):
 
 
 def _rep(score, passed):
-    return {"task_id": "t1", "passed": passed, "total_score": score,
-            "feedback": "fb", "clean_code": "x"}
+    return {"task_id": "t1", "passed": passed, "total_score": score, "feedback": "fb", "clean_code": "x"}
 
 
 def test_loop_reads_config():
@@ -128,11 +120,11 @@ def test_loop_agent_error_stops():
 
 # ---- JudgeEvaluator ----
 
+
 def _judge(settings):
     j = JudgeEvaluator(settings=settings)
     j.sandbox = MagicMock()
-    j.sandbox.execute.return_value = {
-        "passed": True, "stdout": "", "stderr": "", "violations": [], "exit_code": 0}
+    j.sandbox.execute.return_value = {"passed": True, "stdout": "", "stderr": "", "violations": [], "exit_code": 0}
     return j
 
 
@@ -165,8 +157,7 @@ def test_judge_threshold_boundary():
 
 def test_judge_sandbox_failure_never_passes_even_threshold_zero():
     j = _judge(_h(pass_threshold=0, target_score=100))
-    j.sandbox.execute.return_value = {
-        "passed": False, "stdout": "", "stderr": "e", "violations": [], "exit_code": 1}
+    j.sandbox.execute.return_value = {"passed": False, "stdout": "", "stderr": "e", "violations": [], "exit_code": 1}
     assert j.evaluate_candidate(TASK, CODE)["passed"] is False
 
 

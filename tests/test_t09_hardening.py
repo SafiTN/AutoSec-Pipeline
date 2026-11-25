@@ -1,5 +1,6 @@
 """T09 security-fix tests: sample marker, render_error, stale file, path hardening,
 __main__ exit codes. Fully offline: no moviepy encode, no TTS, no network."""
+
 import json
 import runpy
 from pathlib import Path
@@ -61,8 +62,7 @@ def test_empty_sample_label_still_draws_sample(tmp_path, spy, label):
 
 def test_smart_slide_sample_draws_label(tmp_path, spy):
     g = CyberMediaGenerator(make_settings(tmp_path))
-    g.render_smart_scene_slide(tmp_path / "s.png", 1, "T", "cue", bullets=["a"],
-                               key_takeaway="k", is_sample=True)
+    g.render_smart_scene_slide(tmp_path / "s.png", 1, "T", "cue", bullets=["a"], key_takeaway="k", is_sample=True)
     assert "SAMPLE" in spy
 
 
@@ -116,8 +116,7 @@ def test_build_video_forwards_is_sample_in_legacy_mode(tmp_path, stub_media, mon
     g = CyberMediaGenerator(make_settings(tmp_path, "legacy"))
     Path(g.output_dir).mkdir(parents=True, exist_ok=True)
     seen = []
-    monkeypatch.setattr(g, "_create_cyber_slide",
-                        lambda **kw: seen.append(kw.get("is_sample")))
+    monkeypatch.setattr(g, "_create_cyber_slide", lambda **kw: seen.append(kw.get("is_sample")))
     g.build_video(SCENES, "v.mp4", is_sample=True)
     g.build_video(SCENES, "v.mp4")
     assert seen == [True, False]
@@ -127,8 +126,9 @@ def test_build_video_forwards_is_sample_in_slide_mode(tmp_path, stub_media, monk
     g = CyberMediaGenerator(make_settings(tmp_path))
     Path(g.output_dir).mkdir(parents=True, exist_ok=True)
     seen = []
-    monkeypatch.setattr(g, "render_smart_scene_slide",
-                        lambda **kw: seen.append(kw.get("is_sample")) or tmp_path / "s.png")
+    monkeypatch.setattr(
+        g, "render_smart_scene_slide", lambda **kw: seen.append(kw.get("is_sample")) or tmp_path / "s.png"
+    )
     g.build_video(SCENES, "v.mp4", is_sample=True)
     assert seen == [True]
 
@@ -156,11 +156,14 @@ def test_build_video_neutralises_dotdot_in_name(tmp_path, stub_media, monkeypatc
 
 
 # ---------- main._video_filename ----------
-@pytest.mark.parametrize("name,sample,expected", [
-    ("../../evil.mp4", False, "evil.mp4"),
-    ("sub/dir/a.mp4", True, "sample_a.mp4"),
-    ("..", False, ""),
-])
+@pytest.mark.parametrize(
+    "name,sample,expected",
+    [
+        ("../../evil.mp4", False, "evil.mp4"),
+        ("sub/dir/a.mp4", True, "sample_a.mp4"),
+        ("..", False, ""),
+    ],
+)
 def test_video_filename_strips_directories(name, sample, expected):
     out = main._video_filename({"paths": {"default_video_filename": name}}, sample)
     assert "/" not in out and "\\" not in out and ".." not in out.replace("sample_", "") or out == ".."
@@ -179,8 +182,7 @@ class _Fetcher:
         pass
 
     def fetch_latest_cves(self, limit=3):
-        return [{"cve_id": "CVE-2026-1", "severity": "HIGH", "cvss_score": 8.0,
-                 "summary": "s", "is_sample": False}]
+        return [{"cve_id": "CVE-2026-1", "severity": "HIGH", "cvss_score": 8.0, "summary": "s", "is_sample": False}]
 
 
 class _Writer:
@@ -188,16 +190,23 @@ class _Writer:
         pass
 
     def generate_episode_script(self, advisory, max_scenes=3):
-        return {"episode_title": "T", "cve_id": advisory["cve_id"],
-                "scenes": [{"title": "s", "narration": "n", "visual_cue": "c"}]}
+        return {
+            "episode_title": "T",
+            "cve_id": advisory["cve_id"],
+            "scenes": [{"title": "s", "narration": "n", "visual_cue": "c"}],
+        }
 
 
 def _settings(tmp_path):
-    return {"nvd": {"max_results": 5},
-            "paths": {"output_dir": str(tmp_path / "output"),
-                      "default_video_filename": "v.mp4",
-                      "manifest_filename": "m.json",
-                      "covered_cves_filename": "c.json"}}
+    return {
+        "nvd": {"max_results": 5},
+        "paths": {
+            "output_dir": str(tmp_path / "output"),
+            "default_video_filename": "v.mp4",
+            "manifest_filename": "m.json",
+            "covered_cves_filename": "c.json",
+        },
+    }
 
 
 def _run(monkeypatch, tmp_path, media_cls):

@@ -59,7 +59,9 @@ class AutoHarnessLoop:
         for attempt in range(1, self.max_iterations + 1):
             # خفض الحرارة تدريجياً عند التصحيح لزيادة الدقة
             self.agent.temperature = max(0.0, round(self.base_temperature - (attempt - 1) * 0.05, 2))
-            logger.info("[%s] Attempt %d/%d (temp=%.2f)...", task_id, attempt, self.max_iterations, self.agent.temperature)
+            logger.info(
+                "[%s] Attempt %d/%d (temp=%.2f)...", task_id, attempt, self.max_iterations, self.agent.temperature
+            )
 
             raw_response = self.agent.query_local_agent(prompt=prompt, system_prompt=self.system_prompt)
             if raw_response.startswith("Error:"):
@@ -101,8 +103,13 @@ class AutoHarnessLoop:
         passed_count = sum(1 for r in results if r["passed"])
         pass_rate = round((passed_count / len(results)) * 100.0, 2)
 
-        logger.info("[FINAL SUMMARY] Passed: %d/%d (%.1f%%) | Average Score: %.2f/100",
-                    passed_count, len(results), pass_rate, avg_score)
+        logger.info(
+            "[FINAL SUMMARY] Passed: %d/%d (%.1f%%) | Average Score: %.2f/100",
+            passed_count,
+            len(results),
+            pass_rate,
+            avg_score,
+        )
 
         return {
             "temperature": self.agent.temperature,

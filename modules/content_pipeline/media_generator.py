@@ -118,8 +118,15 @@ def wrap_text(text: str, font, max_width_px: int, max_lines: int | None = None) 
     return lines
 
 
-def fit_text(text: str, font_path: str | None, size: int, min_size: int,
-             max_width_px: int, max_height_px: int, spacing: float = 1.35):
+def fit_text(
+    text: str,
+    font_path: str | None,
+    size: int,
+    min_size: int,
+    max_width_px: int,
+    max_height_px: int,
+    spacing: float = 1.35,
+):
     """Shrink the font until the wrapped text fits the box; truncate with an
     ellipsis at min_size. Returns (font, lines, line_step)."""
     cur = max(size, min_size)
@@ -149,16 +156,11 @@ class CyberMediaGenerator:
         self.output_dir = str(resolve_project_path(media_cfg["output_directory"]))
         slides_cfg_dir = media_cfg.get("slides_directory")
         self.slides_dir = (
-            Path(resolve_project_path(slides_cfg_dir)) if slides_cfg_dir
-            else Path(self.output_dir) / "slides"
+            Path(resolve_project_path(slides_cfg_dir)) if slides_cfg_dir else Path(self.output_dir) / "slides"
         )
         self.visual_mode = media_cfg.get("visual_mode") or "slide"
         self.voice = media_cfg["voice"]
-        self.fps = int(
-            media_cfg.get("video_fps")
-            or media_cfg.get("fps")
-            or 24
-        )
+        self.fps = int(media_cfg.get("video_fps") or media_cfg.get("fps") or 24)
         self.width = media_cfg["resolution"]["width"]
         self.height = media_cfg["resolution"]["height"]
 
@@ -233,8 +235,9 @@ class CyberMediaGenerator:
 
         img = Image.new("RGB", (w, h), color=BG)
         draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([margin, margin, w - margin, h - margin], radius=int(20 * scale),
-                               fill=CARD, outline=ACCENT, width=2)
+        draw.rounded_rectangle(
+            [margin, margin, w - margin, h - margin], radius=int(20 * scale), fill=CARD, outline=ACCENT, width=2
+        )
         draw.rectangle([margin, margin, w - margin, margin + int(8 * scale)], fill=ACCENT)
 
         left = margin + pad
@@ -261,15 +264,15 @@ class CyberMediaGenerator:
             bbox = badge_font.getbbox(label)
             bw = int(_text_width(badge_font, label)) + 2 * bx
             bh = _line_height(badge_font) + 2 * by
-            draw.rounded_rectangle([x, y, x + bw, y + bh], radius=bh // 2, fill=fill,
-                                   outline=ACCENT if fill is None else None, width=2)
+            draw.rounded_rectangle(
+                [x, y, x + bw, y + bh], radius=bh // 2, fill=fill, outline=ACCENT if fill is None else None, width=2
+            )
             draw.text((x + bx, y + by - bbox[1]), label, fill=fg, font=badge_font)
             x += bw + int(12 * scale)
             badge_h = max(badge_h, bh)
         scene_font = self._font("regular", "header", scale)
         scene_label = f"{scene_index:02d}"
-        draw.text((right - _text_width(scene_font, scene_label), y + by), scene_label,
-                  fill=TEXT_MUTED, font=scene_font)
+        draw.text((right - _text_width(scene_font, scene_label), y + by), scene_label, fill=TEXT_MUTED, font=scene_font)
         y += badge_h + int(22 * scale)
 
         # Takeaway callout reserves space at the bottom
@@ -278,8 +281,13 @@ class CyberMediaGenerator:
         if takeaway:
             c_pad = int(16 * scale)
             t_font, t_lines, t_step = fit_text(
-                takeaway, self._font_path("bold"), int(sizes["takeaway"] * scale), min_size,
-                inner_w - 2 * pad, int(h * 0.2))
+                takeaway,
+                self._font_path("bold"),
+                int(sizes["takeaway"] * scale),
+                min_size,
+                inner_w - 2 * pad,
+                int(h * 0.2),
+            )
             callout_top = bottom - (len(t_lines) * t_step + 2 * c_pad)
             callout = (t_font, t_lines, t_step, c_pad)
 
@@ -288,7 +296,8 @@ class CyberMediaGenerator:
         title_size = int(sizes["title"] * scale * (1.25 if is_card else 1.0))
         t_max_h = int((h - y) * (0.5 if is_card else 0.28))
         title_font, title_lines, title_step = fit_text(
-            clean_title, self._font_path("bold"), title_size, min_size, inner_w, t_max_h, spacing=1.2)
+            clean_title, self._font_path("bold"), title_size, min_size, inner_w, t_max_h, spacing=1.2
+        )
         for line in title_lines:
             draw.text((left, y), line, fill=TEXT_MAIN, font=title_font)
             y += title_step
@@ -305,28 +314,36 @@ class CyberMediaGenerator:
             per_item_h = max(1, (body_bottom - y) // len(items) - gap)
             for item in items:
                 b_font, b_lines, b_step = fit_text(
-                    item, self._font_path("regular"), int(sizes["body"] * scale), min_size,
-                    inner_w - marker_w, per_item_h)
+                    item,
+                    self._font_path("regular"),
+                    int(sizes["body"] * scale),
+                    min_size,
+                    inner_w - marker_w,
+                    per_item_h,
+                )
                 if clean_bullets:
                     cy = y + b_step // 2
                     r = max(4, int(9 * scale))
                     if layout == "checklist":
                         box = [left, cy - r, left + 2 * r, cy + r]
                         draw.rounded_rectangle(box, radius=3, outline=ACCENT, width=3)
-                        draw.line([(box[0] + r // 2, cy), (left + r, cy + r // 2),
-                                   (box[2] - r // 3, cy - r // 2)], fill=ACCENT, width=3)
+                        draw.line(
+                            [(box[0] + r // 2, cy), (left + r, cy + r // 2), (box[2] - r // 3, cy - r // 2)],
+                            fill=ACCENT,
+                            width=3,
+                        )
                     else:
                         draw.ellipse([left, cy - r // 2, left + r, cy + r // 2], fill=ACCENT)
                 for line in b_lines:
-                    draw.text((left + marker_w, y), line,
-                              fill=TEXT_MAIN if clean_bullets else TEXT_MUTED, font=b_font)
+                    draw.text((left + marker_w, y), line, fill=TEXT_MAIN if clean_bullets else TEXT_MUTED, font=b_font)
                     y += b_step
                 y += gap
 
         if callout:
             t_font, t_lines, t_step, c_pad = callout
-            draw.rounded_rectangle([left, callout_top, right, bottom], radius=int(12 * scale),
-                                   fill=CALLOUT_BG, outline=ACCENT, width=2)
+            draw.rounded_rectangle(
+                [left, callout_top, right, bottom], radius=int(12 * scale), fill=CALLOUT_BG, outline=ACCENT, width=2
+            )
             bar = max(4, int(6 * scale))
             draw.rectangle([left, callout_top + 6, left + bar, bottom - 6], fill=ACCENT)
             ty = callout_top + c_pad
@@ -342,8 +359,7 @@ class CyberMediaGenerator:
         img.save(target, format="PNG")
         return target
 
-    def _draw_sample_marker(self, draw, scale: float, left: int, right: int,
-                            band_top: int, band_bottom: int) -> None:
+    def _draw_sample_marker(self, draw, scale: float, left: int, right: int, band_top: int, band_bottom: int) -> None:
         """Draw the sample pill (media.slide.sample_label) right-aligned in the given band."""
         label = str(self.slide_cfg.get("sample_label") or "SAMPLE")
         s_font = self._font("bold", "badge", scale)
@@ -354,12 +370,10 @@ class CyberMediaGenerator:
         pw = int(_text_width(s_font, label)) + 2 * sx
         ph = min(_line_height(s_font) + 2 * sy, max(1, band_bottom - band_top - 2))
         py = band_top + max(0, (band_bottom - band_top - ph) // 2)
-        draw.rounded_rectangle([right - pw, py, right, py + ph], radius=ph // 2,
-                               fill=SEVERITY_COLORS["CRITICAL"])
+        draw.rounded_rectangle([right - pw, py, right, py + ph], radius=ph // 2, fill=SEVERITY_COLORS["CRITICAL"])
         draw.text((right - pw + sx, py + sy - bbox[1]), label, fill=(255, 255, 255), font=s_font)
 
-    def _create_cyber_slide(self, title: str, content: str, slide_path: str, is_code=False,
-                           is_sample: bool = False):
+    def _create_cyber_slide(self, title: str, content: str, slide_path: str, is_code=False, is_sample: bool = False):
         """Legacy dark slide (non-"slide" visual modes), sized from settings."""
         w, h = self.width, self.height
         img = Image.new("RGB", (w, h), color=(13, 17, 23))
@@ -471,4 +485,6 @@ if __name__ == "__main__":
         },
     ]
     generator = CyberMediaGenerator()
-    print(f"Video generated at: {generator.build_video(sample_scenes, 'cve_analysis_ep1.mp4', 'CVE-2026-0000', 'CRITICAL')}")
+    print(
+        f"Video generated at: {generator.build_video(sample_scenes, 'cve_analysis_ep1.mp4', 'CVE-2026-0000', 'CRITICAL')}"
+    )
