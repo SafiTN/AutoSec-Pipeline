@@ -140,7 +140,7 @@ python -m pytest -v
 
 Run with coverage (same gate as CI, fails below 86%): `pip install -r requirements-dev.txt && python -m pytest --cov=core --cov=modules --cov-report=term --cov-fail-under=86`
 
-Lint (same as CI): `ruff check .` (config in `ruff.toml`; formatting is not enforced yet).
+Lint and format check (same as CI): `ruff check .` and `ruff format --check .` (config in `ruff.toml`).
 
 ---
 
