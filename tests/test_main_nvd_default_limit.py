@@ -36,14 +36,15 @@ class _StubMediaGenerator:
     def __init__(self, settings=None):
         self.settings = settings
 
-    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None, severity=None):
-        return "/fake/output/episode.mp4"
+    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None,
+                    severity=None, is_sample=False):
+        return None
 
 
-def _fake_settings(default_limit: int = 3, max_results: int = 10):
+def _fake_settings(output_dir, default_limit: int = 3, max_results: int = 10):
     return {
         "nvd": {"default_limit": default_limit, "max_results": max_results, "allow_fallback": False},
-        "paths": {"output_dir": "output", "covered_cves_filename": "covered_cves.json"},
+        "paths": {"output_dir": str(output_dir), "covered_cves_filename": "covered_cves.json"},
     }
 
 
@@ -56,7 +57,7 @@ def test_run_pipeline_uses_nvd_max_results_when_cve_limit_is_none(monkeypatch, t
     custom_default_limit = 3
     custom_max_results = 7
     monkeypatch.setattr(
-        main, "load_settings", lambda: _fake_settings(custom_default_limit, custom_max_results)
+        main, "load_settings", lambda: _fake_settings(tmp_path / "output", custom_default_limit, custom_max_results)
     )
 
     mock_fetcher_instance = MagicMock()
@@ -75,7 +76,7 @@ def test_run_pipeline_explicit_cve_limit_overrides_nvd_default_limit(monkeypatch
     """An explicit cve_limit must win over nvd.max_results (not be ignored)."""
     monkeypatch.chdir(tmp_path)
 
-    monkeypatch.setattr(main, "load_settings", lambda: _fake_settings(default_limit=9, max_results=9))
+    monkeypatch.setattr(main, "load_settings", lambda: _fake_settings(tmp_path / "output", default_limit=9, max_results=9))
 
     mock_fetcher_instance = MagicMock()
     mock_fetcher_instance.fetch_latest_cves.return_value = [dict(FALLBACK_ADVISORIES[0])]

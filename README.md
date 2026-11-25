@@ -11,7 +11,7 @@ An autonomous, local-first cybersecurity content pipeline that automates CVE dis
 1. **Self-Evaluation & Harness (`AutoHarnessLoop`, `SandboxExecutor`, `JudgeEvaluator`)**: Validates code/security checks and evaluates outputs against objective criteria.
 2. **CVE Discovery (`NewsFetcher`)**: Queries the NVD REST API (2.0) over a configurable lookback window with retry logic, SSL certificate verification (`certifi`), and safe fallback advisories.
 3. **Prompt Optimization & Script Writing (`PromptOptimizer`, `ScriptWriter`)**: Builds structured system/user prompts, cleans narration text for TTS compatibility, and generates multi-scene English JSON scripts using a local Ollama model (e.g., `qwen2.5-coder:7b`).
-4. **Media Rendering & Manifest Logging (`CyberMediaGenerator`, `main.py`)**: Normalizes scene payloads, generates voiceovers via `edge-tts`, renders dark-themed technical slides locally using `Pillow` (`render_smart_scene_slide`), compiles the final `MP4` video with `MoviePy`, and logs run artifacts in `output/last_episode_manifest.json`.
+4. **Media Rendering & Manifest Logging (`CyberMediaGenerator`, `main.py`)**: Normalizes scene payloads, generates voiceovers via `edge-tts`, renders dark-themed technical slides locally using `Pillow` (`render_smart_scene_slide`), compiles the final `MP4` video with `MoviePy`, and logs run artifacts in `output/last_episode_manifest.json` (including `prompt_version`, `is_sample` and `render_error`; sample runs are watermarked "SAMPLE" and the run exits non-zero if no video was produced).
 
 ---
 
