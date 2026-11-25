@@ -50,3 +50,10 @@ Never skip steps 4 and 5. Never merge with failing tests.
 
 ## Code conventions
 Python 3.10+, type hints on public functions, `logging` not `print` (except `__main__` demos), small functions, pure functions where possible so they are testable. Paths via `core.config_loader.resolve_project_path`.
+
+## Token economy rules
+1. Targeted reads only: grep/glob or line ranges first; open only files strictly needed.
+2. No blind exploration (`find`, `ls -R`, bulk directory reads) unless the owner asks.
+3. Concise, factual replies: no repetitive summaries, no restating instructions; show only useful snippets or changes made.
+4. Surgical edits: short, targeted, complete changes; do not rewrite long files unnecessarily.
+5. Session hygiene: briefly remind the owner to run `/clear` when a task ends or the topic changes, and `/compact` when context gets heavy.
