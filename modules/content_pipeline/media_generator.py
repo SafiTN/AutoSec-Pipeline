@@ -1,21 +1,147 @@
 import asyncio
+import logging
 import os
+import re
 import sys
-import textwrap
 from pathlib import Path
 
 import edge_tts
 from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
 from PIL import Image, ImageDraw, ImageFont
 
-# إضافة المسار الجذري للمشروع ليتمكن بايثون من التعرف على مجلد core بسهولة
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-from core.config_loader import load_settings
+from core.config_loader import load_settings, resolve_project_path
+
+logger = logging.getLogger(__name__)
+
+ELLIPSIS = "..."
+NOT_SPECIFIED = "not yet specified"
+
+# Defaults mirror config/settings.yaml (media.slide); settings override them.
+DEFAULT_SLIDE_CFG = {
+    "fonts": {
+        "regular": "assets/fonts/Inter-Regular.ttf",
+        "bold": "assets/fonts/Inter-Bold.ttf",
+        "mono": "",
+    },
+    "sizes": {"title": 46, "body": 30, "header": 22, "badge": 22, "takeaway": 28},
+    "min_font_size": 18,
+    "margin": 48,
+    "max_bullets": 3,
+}
+
+BG = (11, 17, 32)
+CARD = (17, 24, 39)
+ACCENT = (34, 211, 238)
+TEXT_MAIN = (241, 245, 249)
+TEXT_MUTED = (148, 163, 184)
+DIVIDER = (51, 65, 85)
+CALLOUT_BG = (8, 47, 73)
+NEUTRAL_BADGE = (71, 85, 105)
+
+SEVERITY_COLORS = {
+    "CRITICAL": (220, 38, 38),
+    "HIGH": (234, 88, 12),
+    "MEDIUM": (202, 138, 4),
+    "LOW": (22, 163, 74),
+}
+_CHECKLIST_RE = re.compile(r"mitigat|patch|fix|remediat|recommend|protect|defen|what to do", re.I)
+
+
+def load_font(path: str | None, size: int):
+    """Single place that loads fonts: bundled file by project-relative path,
+    falling back to Pillow's built-in font (with a warning) if it is missing."""
+    if path:
+        resolved = resolve_project_path(path)
+        try:
+            return ImageFont.truetype(str(resolved), size)
+        except OSError:
+            logger.warning("Bundled font missing or unreadable: %s; using Pillow default", resolved)
+    return ImageFont.load_default(size)
+
+
+def _text_width(font, text: str) -> float:
+    return font.getlength(text)
+
+
+def _line_height(font) -> int:
+    box = font.getbbox("Ag")
+    return int(box[3] - box[1])
+
+
+def _break_token(token: str, font, max_width_px: int) -> list[str]:
+    """Split a single over-long token into pieces that fit max_width_px."""
+    pieces, cur = [], ""
+    for ch in token:
+        if cur and _text_width(font, cur + ch) > max_width_px:
+            pieces.append(cur)
+            cur = ch
+        else:
+            cur += ch
+    if cur:
+        pieces.append(cur)
+    return pieces
+
+
+def _ellipsize(line: str, font, max_width_px: int) -> str:
+    line = line.rstrip()
+    while line and _text_width(font, line + ELLIPSIS) > max_width_px:
+        line = line[:-1].rstrip()
+    return line + ELLIPSIS
+
+
+def wrap_text(text: str, font, max_width_px: int, max_lines: int | None = None) -> list[str]:
+    """Pixel-based word wrap. Over-long tokens are broken; when more than
+    max_lines would be needed the last line is truncated with an ellipsis."""
+    lines: list[str] = []
+    for paragraph in str(text or "").splitlines() or [""]:
+        cur = ""
+        for word in paragraph.split():
+            if _text_width(font, word) <= max_width_px:
+                tokens = [word]
+            else:
+                tokens = _break_token(word, font, max_width_px)
+            for token in tokens:
+                candidate = f"{cur} {token}" if cur else token
+                if _text_width(font, candidate) <= max_width_px:
+                    cur = candidate
+                else:
+                    if cur:
+                        lines.append(cur)
+                    cur = token
+        lines.append(cur)
+    if max_lines is not None and len(lines) > max_lines:
+        lines = lines[:max_lines]
+        if max_lines > 0:
+            lines[-1] = _ellipsize(lines[-1], font, max_width_px)
+    return lines
+
+
+def fit_text(text: str, font_path: str | None, size: int, min_size: int,
+             max_width_px: int, max_height_px: int, spacing: float = 1.35):
+    """Shrink the font until the wrapped text fits the box; truncate with an
+    ellipsis at min_size. Returns (font, lines, line_step)."""
+    cur = max(size, min_size)
+    while True:
+        font = load_font(font_path, cur)
+        step = max(1, int(_line_height(font) * spacing))
+        max_lines = max(1, max_height_px // step)
+        if len(wrap_text(text, font, max_width_px)) <= max_lines or cur <= min_size:
+            return font, wrap_text(text, font, max_width_px, max_lines), step
+        cur -= 2
+
+
+def severity_badge(severity: str | None) -> tuple[str, tuple[int, int, int]]:
+    """Map severity to (label, colour). Unknown/missing is never invented."""
+    key = str(severity or "").strip().upper()
+    if key in SEVERITY_COLORS:
+        return key, SEVERITY_COLORS[key]
+    return NOT_SPECIFIED.upper(), NEUTRAL_BADGE
 
 
 class CyberMediaGenerator:
     def __init__(self, settings=None):
-        """تهيئة مولد الوسائط بالاعتماد على ملف الإعدادات المركزي"""
+        """Initialise the media generator from the central settings file."""
         self.settings = settings or load_settings()
         media_cfg = self.settings["media"]
 
@@ -31,13 +157,37 @@ class CyberMediaGenerator:
         self.width = media_cfg["resolution"]["width"]
         self.height = media_cfg["resolution"]["height"]
 
+        slide_cfg = media_cfg.get("slide") or {}
+        self.slide_cfg = {}
+        for key, default in DEFAULT_SLIDE_CFG.items():
+            if isinstance(default, dict):
+                self.slide_cfg[key] = {**default, **(slide_cfg.get(key) or {})}
+            else:
+                self.slide_cfg[key] = slide_cfg.get(key, default)
+
         os.makedirs(self.output_dir, exist_ok=True)
         self.slides_dir.mkdir(parents=True, exist_ok=True)
 
     async def _generate_voiceover(self, text: str, audio_path: str):
-        """توليد ملف الصوت من النص مجاناً باستخدام Edge-TTS"""
+        """Generate the voiceover file with Edge-TTS."""
         communicate = edge_tts.Communicate(text, self.voice, rate="+5%")
         await communicate.save(audio_path)
+
+    def _font_path(self, role: str) -> str | None:
+        fonts = self.slide_cfg["fonts"]
+        return fonts.get(role) or fonts.get("regular")
+
+    def _font(self, role: str, size_key: str, scale: float = 1.0):
+        px = self.slide_cfg["sizes"][size_key]
+        return load_font(self._font_path(role), max(8, int(px * scale)))
+
+    @staticmethod
+    def _pick_layout(scene_index: int, title: str, bullets: list[str]) -> str:
+        if bullets and _CHECKLIST_RE.search(title or ""):
+            return "checklist"
+        if scene_index == 1:
+            return "title"
+        return "bullets"
 
     def render_smart_scene_slide(
         self,
@@ -49,120 +199,162 @@ class CyberMediaGenerator:
         height: int | None = None,
         cve_id: str | None = None,
         severity: str | None = None,
+        bullets: list[str] | None = None,
+        key_takeaway: str | None = None,
+        layout: str | None = None,
     ) -> Path:
-        """Render a clean, dark-themed cybersecurity slide for a scene using Pillow."""
+        """Render a viewer-facing slide: title, up to max_bullets bullets,
+        takeaway callout, CVE id and severity badge. visual_cue is only the
+        legacy fallback body when no bullets are given and is never labelled."""
         target = Path(output_path)
         target.parent.mkdir(parents=True, exist_ok=True)
 
         w = width or self.width
         h = height or self.height
+        scale = min(w / 1280, h / 720)
+        cfg = self.slide_cfg
+        sizes = cfg["sizes"]
+        min_size = max(8, int(cfg["min_font_size"] * scale))
+        margin = int(cfg["margin"] * scale)
+        pad = int(36 * scale)
 
-        # Background & outer card frame
-        bg_color = (11, 17, 32)       # Deep navy-slate
-        card_color = (17, 24, 39)     # Slightly elevated panel
-        accent_cyan = (34, 211, 238)  # Cybersecurity cyan accent
-        text_main = (241, 245, 249)
-        text_muted = (148, 163, 184)
+        clean_bullets = [str(b).strip() for b in (bullets or []) if str(b or "").strip()]
+        clean_bullets = clean_bullets[: int(cfg["max_bullets"])]
+        takeaway = str(key_takeaway or "").strip()
+        clean_title = str(title or "").strip() or "Technical Breakdown"
+        legacy_body = "" if clean_bullets else str(visual_cue or "").strip()
+        layout = layout or self._pick_layout(scene_index, clean_title, clean_bullets)
 
-        img = Image.new("RGB", (w, h), color=bg_color)
+        img = Image.new("RGB", (w, h), color=BG)
         draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle([margin, margin, w - margin, h - margin], radius=int(20 * scale),
+                               fill=CARD, outline=ACCENT, width=2)
+        draw.rectangle([margin, margin, w - margin, margin + int(8 * scale)], fill=ACCENT)
 
-        margin = 48
-        draw.rounded_rectangle(
-            [margin, margin, w - margin, h - margin],
-            radius=20,
-            fill=card_color,
-            outline=accent_cyan,
-            width=2,
-        )
+        left = margin + pad
+        right = w - margin - pad
+        inner_w = right - left
+        bottom = h - margin - pad
 
-        # Top accent bar
-        draw.rectangle([margin, margin, w - margin, margin + 8], fill=accent_cyan)
+        # Header row: CVE badge + severity badge (left), scene number (right)
+        badge_font = self._font("bold", "badge", scale)
+        y = margin + int(28 * scale)
+        x = left
+        bx, by = int(14 * scale), int(8 * scale)
+        badge_h = 0
+        cve_text = str(cve_id).strip() if cve_id else f"CVE {NOT_SPECIFIED}"
+        sev_text, sev_color = severity_badge(severity)
+        for text, fill, fg in (
+            (cve_text, None, ACCENT),
+            (f"SEVERITY: {sev_text}", sev_color, (255, 255, 255)),
+        ):
+            avail = right - x - 2 * bx
+            if avail <= 0:
+                break
+            label = wrap_text(text, badge_font, avail, max_lines=1)[0]
+            bbox = badge_font.getbbox(label)
+            bw = int(_text_width(badge_font, label)) + 2 * bx
+            bh = _line_height(badge_font) + 2 * by
+            draw.rounded_rectangle([x, y, x + bw, y + bh], radius=bh // 2, fill=fill,
+                                   outline=ACCENT if fill is None else None, width=2)
+            draw.text((x + bx, y + by - bbox[1]), label, fill=fg, font=badge_font)
+            x += bw + int(12 * scale)
+            badge_h = max(badge_h, bh)
+        scene_font = self._font("regular", "header", scale)
+        scene_label = f"{scene_index:02d}"
+        draw.text((right - _text_width(scene_font, scene_label), y + by), scene_label,
+                  fill=TEXT_MUTED, font=scene_font)
+        y += badge_h + int(22 * scale)
 
-        try:
-            font_header = ImageFont.truetype("arialbd.ttf", 26)
-            font_title = ImageFont.truetype("arialbd.ttf", 44)
-            font_body = ImageFont.truetype("arial.ttf", 30)
-        except IOError:
-            font_header = ImageFont.load_default()
-            font_title = ImageFont.load_default()
-            font_body = ImageFont.load_default()
+        # Takeaway callout reserves space at the bottom
+        callout_top = bottom
+        callout = None
+        if takeaway:
+            c_pad = int(16 * scale)
+            t_font, t_lines, t_step = fit_text(
+                takeaway, self._font_path("bold"), int(sizes["takeaway"] * scale), min_size,
+                inner_w - 2 * pad, int(h * 0.2))
+            callout_top = bottom - (len(t_lines) * t_step + 2 * c_pad)
+            callout = (t_font, t_lines, t_step, c_pad)
 
-        # Header badge: Scene number + optional CVE/Severity
-        header_parts = [f"SCENE {scene_index:02d}"]
-        if cve_id:
-            header_parts.append(str(cve_id))
-        if severity:
-            header_parts.append(f"SEVERITY: {str(severity).upper()}")
-        header_text = "  |  ".join(header_parts)
+        # Title
+        is_card = layout == "title"
+        title_size = int(sizes["title"] * scale * (1.25 if is_card else 1.0))
+        t_max_h = int((h - y) * (0.5 if is_card else 0.28))
+        title_font, title_lines, title_step = fit_text(
+            clean_title, self._font_path("bold"), title_size, min_size, inner_w, t_max_h, spacing=1.2)
+        for line in title_lines:
+            draw.text((left, y), line, fill=TEXT_MAIN, font=title_font)
+            y += title_step
+        y += int(8 * scale)
+        draw.line([(left, y), (right, y)], fill=DIVIDER, width=2)
+        y += int(24 * scale)
 
-        draw.text((margin + 36, margin + 28), header_text, fill=accent_cyan, font=font_header)
+        # Body: bullets / checklist items / legacy paragraph
+        body_bottom = callout_top - int(20 * scale)
+        items = clean_bullets or ([legacy_body] if legacy_body else [])
+        if items:
+            marker_w = int(44 * scale) if clean_bullets else 0
+            gap = int(14 * scale)
+            per_item_h = max(1, (body_bottom - y) // len(items) - gap)
+            for item in items:
+                b_font, b_lines, b_step = fit_text(
+                    item, self._font_path("regular"), int(sizes["body"] * scale), min_size,
+                    inner_w - marker_w, per_item_h)
+                if clean_bullets:
+                    cy = y + b_step // 2
+                    r = max(4, int(9 * scale))
+                    if layout == "checklist":
+                        box = [left, cy - r, left + 2 * r, cy + r]
+                        draw.rounded_rectangle(box, radius=3, outline=ACCENT, width=3)
+                        draw.line([(box[0] + r // 2, cy), (left + r, cy + r // 2),
+                                   (box[2] - r // 3, cy - r // 2)], fill=ACCENT, width=3)
+                    else:
+                        draw.ellipse([left, cy - r // 2, left + r, cy + r // 2], fill=ACCENT)
+                for line in b_lines:
+                    draw.text((left + marker_w, y), line,
+                              fill=TEXT_MAIN if clean_bullets else TEXT_MUTED, font=b_font)
+                    y += b_step
+                y += gap
 
-        # Scene title
-        clean_title = (title or "Technical Breakdown").strip()
-        draw.text((margin + 36, margin + 72), clean_title[:90], fill=text_main, font=font_title)
-
-        # Divider line
-        draw.line(
-            [(margin + 36, margin + 132), (w - margin - 36, margin + 132)],
-            fill=(51, 65, 85),
-            width=2,
-        )
-
-        # Visual cue label & wrapped body
-        draw.text((margin + 36, margin + 156), "VISUAL CUE:", fill=accent_cyan, font=font_header)
-
-        cue_text = (visual_cue or "Architectural diagram and key security takeaway.").strip()
-        max_chars = max(35, int((w - 2 * (margin + 36)) / 14))
-
-        lines: list[str] = []
-        for paragraph in cue_text.splitlines():
-            wrapped = textwrap.wrap(paragraph, width=max_chars)
-            lines.extend(wrapped if wrapped else [""])
-
-        y_cursor = margin + 200
-        line_step = 42
-        max_lines = max(3, (h - y_cursor - margin - 30) // line_step)
-
-        for idx, line in enumerate(lines[:max_lines]):
-            display_line = line
-            if idx == max_lines - 1 and len(lines) > max_lines:
-                display_line = f"{line[: max(0, len(line) - 3)]}..."
-            draw.text((margin + 36, y_cursor), display_line, fill=text_muted, font=font_body)
-            y_cursor += line_step
+        if callout:
+            t_font, t_lines, t_step, c_pad = callout
+            draw.rounded_rectangle([left, callout_top, right, bottom], radius=int(12 * scale),
+                                   fill=CALLOUT_BG, outline=ACCENT, width=2)
+            bar = max(4, int(6 * scale))
+            draw.rectangle([left, callout_top + 6, left + bar, bottom - 6], fill=ACCENT)
+            ty = callout_top + c_pad
+            for line in t_lines:
+                draw.text((left + bar + pad // 2, ty), line, fill=TEXT_MAIN, font=t_font)
+                ty += t_step
 
         img.save(target, format="PNG")
         return target
 
     def _create_cyber_slide(self, title: str, content: str, slide_path: str, is_code=False):
-        """إنشاء شريحة بصرية داكنة (Dark Hacker Theme) وفق الأبعاد المحددة في الإعدادات"""
-        img = Image.new("RGB", (self.width, self.height), color=(13, 17, 23))
+        """Legacy dark slide (non-"slide" visual modes), sized from settings."""
+        w, h = self.width, self.height
+        img = Image.new("RGB", (w, h), color=(13, 17, 23))
         draw = ImageDraw.Draw(img)
 
         border_color = (0, 255, 136) if is_code else (56, 139, 253)
-        draw.rectangle([30, 30, self.width - 30, self.height - 30], outline=border_color, width=4)
+        draw.rectangle([30, 30, w - 30, h - 30], outline=border_color, width=4)
 
-        try:
-            title_font = ImageFont.truetype("arialbd.ttf", 54)
-            body_font = ImageFont.truetype("consola.ttf" if is_code else "arial.ttf", 36)
-        except IOError:
-            title_font = ImageFont.load_default()
-            body_font = ImageFont.load_default()
+        title_font = self._font("bold", "title")
+        body_font = self._font("mono" if is_code else "regular", "body")
+        max_w = w - 160
 
-        draw.text((80, 70), f"> {title}", fill=border_color, font=title_font)
-        draw.line([(80, 150), (self.width - 80, 150)], fill=(48, 54, 61), width=3)
+        title_line = wrap_text(f"> {title}", title_font, max_w, max_lines=1)[0]
+        draw.text((80, 70), title_line, fill=border_color, font=title_font)
+        draw.line([(80, 150), (w - 80, 150)], fill=(48, 54, 61), width=3)
 
-        wrap_width = 75 if is_code else 65
-        lines = []
-        for paragraph in content.split("\n"):
-            wrapped = textwrap.wrap(paragraph, width=wrap_width)
-            lines.extend(wrapped if wrapped else [""])
-
+        step = max(1, int(_line_height(body_font) * 1.4))
+        max_lines = max(1, (h - 200 - 60) // step)
         y_text = 200
         text_color = (165, 214, 255) if is_code else (230, 237, 243)
-        for line in lines[:16]:
+        for line in wrap_text(content or "", body_font, max_w, max_lines=max_lines):
             draw.text((80, y_text), line, fill=text_color, font=body_font)
-            y_text += 48
+            y_text += step
 
         img.save(slide_path)
 
@@ -173,7 +365,7 @@ class CyberMediaGenerator:
         cve_id: str | None = None,
         severity: str | None = None,
     ):
-        """تجميع المشاهد (صوت + صورة) في فيديو واحد متكامل"""
+        """Assemble scenes (audio + image) into a single video."""
         video_clips = []
 
         for idx, scene in enumerate(scenes, start=1):
@@ -193,6 +385,8 @@ class CyberMediaGenerator:
                         height=self.height,
                         cve_id=cve_id or scene.get("cve_id"),
                         severity=severity or scene.get("severity"),
+                        bullets=scene.get("on_screen_bullets"),
+                        key_takeaway=scene.get("key_takeaway"),
                     )
                 )
             else:
@@ -228,21 +422,14 @@ class CyberMediaGenerator:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     sample_scenes = [
         {
-            "title": "CRITICAL VULNERABILITY ALERT: CVE-2026-XXXX",
-            "visual_text": "Target: Open-Source Web Parser\nSeverity: 9.8 (Critical)\nImpact: Remote Code Execution (RCE)",
-            "narration": "A new critical vulnerability has just been discovered in a widely used web parser, allowing attackers to execute remote code.",
-            "is_code": False,
-        },
-        {
-            "title": "AUTOMATED EXPLOIT / DETECTION SCRIPT",
-            "visual_text": "import requests\n\ndef check_vuln(target_url):\n    payload = {'header': '{{7*7}}'}\n    res = requests.get(target_url, headers=payload)\n    return '49' in res.text",
-            "narration": "Our autonomous security agent generated and verified this Python script to safely detect if your server is exposed.",
-            "is_code": True,
+            "title": "Critical vulnerability alert",
+            "on_screen_bullets": ["Affected component: open-source web parser", "Impact: remote code execution"],
+            "key_takeaway": "Patch as soon as a fixed version is available.",
+            "narration": "A new critical vulnerability has been reported in a widely used web parser.",
         },
     ]
-
     generator = CyberMediaGenerator()
-    video_file = generator.build_video(sample_scenes, "cve_analysis_ep1.mp4")
-    print(f"[SUCCESS] Video generated at: {video_file}")
+    print(f"Video generated at: {generator.build_video(sample_scenes, 'cve_analysis_ep1.mp4', 'CVE-2026-0000', 'CRITICAL')}")
