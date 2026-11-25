@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import yaml
 
 from core.config_loader import load_settings, resolve_project_path

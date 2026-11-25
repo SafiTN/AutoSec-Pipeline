@@ -20,8 +20,6 @@ import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
-import pytest
-
 from modules.content_pipeline.news_fetcher import FALLBACK_ADVISORIES, NewsFetcher
 
 

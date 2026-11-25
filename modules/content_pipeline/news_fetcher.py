@@ -1,14 +1,14 @@
+import json
 import logging
+import ssl
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-import json
-import certifi
-import ssl
-from datetime import datetime, timedelta, timezone
 
+import certifi
 
 logger = logging.getLogger("AutoSec.NewsFetcher")
 

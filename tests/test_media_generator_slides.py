@@ -10,7 +10,10 @@ sys.path.insert(0, str(ROOT))
 
 from modules.content_pipeline import media_generator as mg  # noqa: E402
 from modules.content_pipeline.media_generator import (  # noqa: E402
-    CyberMediaGenerator, load_font, severity_badge, wrap_text,
+    CyberMediaGenerator,
+    load_font,
+    severity_badge,
+    wrap_text,
 )
 
 LONG = "word " * 80
@@ -83,7 +86,7 @@ def test_wrap_lines_fit(size, maxw):
     font = load_font("assets/fonts/Inter-Regular.ttf", size)
     lines = wrap_text(LONG, font, maxw)
     assert len(lines) > 1
-    assert all(font.getlength(l) <= maxw for l in lines)
+    assert all(font.getlength(ln) <= maxw for ln in lines)
 
 
 def test_wrap_pure_and_deterministic():
@@ -95,7 +98,7 @@ def test_wrap_breaks_overlong_token():
     font = load_font("assets/fonts/Inter-Regular.ttf", 28)
     lines = wrap_text(LONG_TOKEN, font, 300)
     assert len(lines) > 1
-    assert all(font.getlength(l) <= 300 for l in lines)
+    assert all(font.getlength(ln) <= 300 for ln in lines)
     assert "".join(lines) == LONG_TOKEN
 
 
@@ -105,7 +108,7 @@ def test_wrap_max_lines_ellipsis(maxw):
     lines = wrap_text(LONG, font, maxw, max_lines=2)
     assert len(lines) == 2
     assert lines[-1].endswith("...")
-    assert all(font.getlength(l) <= maxw for l in lines)
+    assert all(font.getlength(ln) <= maxw for ln in lines)
 
 
 def test_wrap_no_ellipsis_when_fits():
@@ -199,8 +202,8 @@ def test_no_text_overflows_card(tmp_path, spy, w, h):
         bullets=[LONG, LONG_TOKEN, LONG, "extra"], key_takeaway=LONG)
     assert spy
     for (x, y), text, font in spy:
-        l, t, r, b = font.getbbox(text)
-        assert x + l >= margin, text
+        left, t, r, b = font.getbbox(text)
+        assert x + left >= margin, text
         assert x + r <= w - margin, text
         assert y + b <= h - margin, text
 

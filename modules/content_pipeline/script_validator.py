@@ -6,7 +6,7 @@ nested quantifiers) so long LLM output cannot trigger catastrophic backtracking.
 
 import re
 import unicodedata
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
 SCENE_FIELDS = ("title", "narration", "visual_cue")
 SEVERITY_LEVELS = ("critical", "high", "medium", "low", "none")

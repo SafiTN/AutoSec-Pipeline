@@ -12,9 +12,8 @@ tests/test_main_sample_fallback.py.
 """
 from unittest.mock import MagicMock
 
-from modules.content_pipeline.news_fetcher import FALLBACK_ADVISORIES
-
 import main
+from modules.content_pipeline.news_fetcher import FALLBACK_ADVISORIES
 
 
 class _StubScriptWriter:

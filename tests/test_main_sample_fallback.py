@@ -14,7 +14,6 @@ import pytest
 import main
 from modules.content_pipeline.news_fetcher import FALLBACK_ADVISORIES, NvdFetchError
 
-
 # ---------------------------------------------------------------------------
 # Stubs standing in for the real pipeline collaborators.
 # ---------------------------------------------------------------------------
