@@ -225,3 +225,63 @@ def test_build_video_passes_scene_keys(tmp_path, monkeypatch):
     assert captured["bullets"] == ["a"]
     assert captured["key_takeaway"] == "k"
     assert captured["cve_id"] == "CVE-2026-1" and captured["severity"] == "HIGH"
+
+
+# ---------------------------------------------------------------------------
+# T09: SAMPLE marker
+# ---------------------------------------------------------------------------
+
+_SLIDE_N = [0]
+
+
+def _render(gen, **kw):
+    _SLIDE_N[0] += 1
+    out = Path(gen.slides_dir if hasattr(gen, "slides_dir") else ".") / f"s{_SLIDE_N[0]}.png"
+    return gen.render_smart_scene_slide(
+        out, 1, "T", "v", cve_id="CVE-2026-1",
+        severity="HIGH", bullets=["a"], key_takeaway="k", **kw,
+    )
+
+
+def test_sample_marker_only_when_is_sample(gen, spy):
+    _render(gen)
+    assert "SAMPLE" not in [t for _, t, _ in spy]
+    spy.clear()
+    _render(gen, is_sample=False)
+    assert "SAMPLE" not in [t for _, t, _ in spy]
+    spy.clear()
+    _render(gen, is_sample=True)
+    assert [t for _, t, _ in spy].count("SAMPLE") == 1
+
+
+def test_sample_marker_uses_configured_label(tmp_path, spy):
+    g = CyberMediaGenerator(make_settings(tmp_path, slide={"sample_label": "DEMO"}))
+    _render(g, is_sample=True)
+    texts = [t for _, t, _ in spy]
+    assert "DEMO" in texts and "SAMPLE" not in texts
+
+
+def test_sample_marker_changes_image(gen):
+    a = Image.open(_render(gen)).tobytes()
+    b = Image.open(_render(gen, is_sample=True)).tobytes()
+    assert a != b
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_build_video_forwards_is_sample(tmp_path, monkeypatch, flag):
+    g = CyberMediaGenerator(make_settings(tmp_path))
+    captured = {}
+
+    async def fake_tts(text, path):
+        Path(path).write_bytes(b"")
+
+    def fake_render(**kw):
+        captured.update(kw)
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(g, "_generate_voiceover", fake_tts)
+    monkeypatch.setattr(g, "render_smart_scene_slide", fake_render)
+    with pytest.raises(RuntimeError):
+        g.build_video([{"title": "T", "narration": "n", "visual_cue": "v"}], "x.mp4",
+                      "CVE-2026-1", "HIGH", is_sample=flag)
+    assert captured["is_sample"] is flag

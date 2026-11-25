@@ -28,6 +28,7 @@ DEFAULT_SLIDE_CFG = {
     "min_font_size": 18,
     "margin": 48,
     "max_bullets": 3,
+    "sample_label": "SAMPLE",
 }
 
 BG = (11, 17, 32)
@@ -145,8 +146,12 @@ class CyberMediaGenerator:
         self.settings = settings or load_settings()
         media_cfg = self.settings["media"]
 
-        self.output_dir = media_cfg["output_directory"]
-        self.slides_dir = Path(media_cfg.get("slides_directory") or os.path.join(self.output_dir, "slides"))
+        self.output_dir = str(resolve_project_path(media_cfg["output_directory"]))
+        slides_cfg_dir = media_cfg.get("slides_directory")
+        self.slides_dir = (
+            Path(resolve_project_path(slides_cfg_dir)) if slides_cfg_dir
+            else Path(self.output_dir) / "slides"
+        )
         self.visual_mode = media_cfg.get("visual_mode") or "slide"
         self.voice = media_cfg["voice"]
         self.fps = int(
@@ -202,6 +207,7 @@ class CyberMediaGenerator:
         bullets: list[str] | None = None,
         key_takeaway: str | None = None,
         layout: str | None = None,
+        is_sample: bool = False,
     ) -> Path:
         """Render a viewer-facing slide: title, up to max_bullets bullets,
         takeaway callout, CVE id and severity badge. visual_cue is only the
@@ -328,10 +334,32 @@ class CyberMediaGenerator:
                 draw.text((left + bar + pad // 2, ty), line, fill=TEXT_MAIN, font=t_font)
                 ty += t_step
 
+        if is_sample:
+            # Bottom-right, inside the card's bottom padding band (below the
+            # callout/bullets, within margins), so nothing else is overlapped.
+            self._draw_sample_marker(draw, scale, left, right, bottom, h - margin)
+
         img.save(target, format="PNG")
         return target
 
-    def _create_cyber_slide(self, title: str, content: str, slide_path: str, is_code=False):
+    def _draw_sample_marker(self, draw, scale: float, left: int, right: int,
+                            band_top: int, band_bottom: int) -> None:
+        """Draw the sample pill (media.slide.sample_label) right-aligned in the given band."""
+        label = str(self.slide_cfg.get("sample_label") or "SAMPLE")
+        s_font = self._font("bold", "badge", scale)
+        sx, sy = int(12 * scale), int(2 * scale)
+        max_w = max(1, right - left - 2 * sx)
+        label = wrap_text(label, s_font, max_w, max_lines=1)[0]
+        bbox = s_font.getbbox(label)
+        pw = int(_text_width(s_font, label)) + 2 * sx
+        ph = min(_line_height(s_font) + 2 * sy, max(1, band_bottom - band_top - 2))
+        py = band_top + max(0, (band_bottom - band_top - ph) // 2)
+        draw.rounded_rectangle([right - pw, py, right, py + ph], radius=ph // 2,
+                               fill=SEVERITY_COLORS["CRITICAL"])
+        draw.text((right - pw + sx, py + sy - bbox[1]), label, fill=(255, 255, 255), font=s_font)
+
+    def _create_cyber_slide(self, title: str, content: str, slide_path: str, is_code=False,
+                           is_sample: bool = False):
         """Legacy dark slide (non-"slide" visual modes), sized from settings."""
         w, h = self.width, self.height
         img = Image.new("RGB", (w, h), color=(13, 17, 23))
@@ -356,6 +384,10 @@ class CyberMediaGenerator:
             draw.text((80, y_text), line, fill=text_color, font=body_font)
             y_text += step
 
+        if is_sample:
+            # Band between the last text line limit (h - 60) and the border (h - 30).
+            self._draw_sample_marker(draw, 1.0, 80, w - 60, h - 60, h - 30)
+
         img.save(slide_path)
 
     def build_video(
@@ -364,9 +396,15 @@ class CyberMediaGenerator:
         final_video_name="cyber_episode.mp4",
         cve_id: str | None = None,
         severity: str | None = None,
+        is_sample: bool = False,
     ):
-        """Assemble scenes (audio + image) into a single video."""
+        """Assemble scenes (audio + image) into a single video.
+        is_sample=True draws a visible sample marker on every slide."""
         video_clips = []
+        output_path = os.path.join(self.output_dir, Path(final_video_name).name)
+        if os.path.isfile(output_path):
+            # Remove a stale file so a failed render cannot pass the caller's isfile check.
+            os.remove(output_path)
 
         for idx, scene in enumerate(scenes, start=1):
             audio_path = os.path.join(self.output_dir, f"scene_{idx}.mp3")
@@ -387,6 +425,7 @@ class CyberMediaGenerator:
                         severity=severity or scene.get("severity"),
                         bullets=scene.get("on_screen_bullets"),
                         key_takeaway=scene.get("key_takeaway"),
+                        is_sample=is_sample,
                     )
                 )
             else:
@@ -396,6 +435,7 @@ class CyberMediaGenerator:
                     content=visual_text,
                     slide_path=slide_path,
                     is_code=scene.get("is_code", False),
+                    is_sample=is_sample,
                 )
 
             audio_clip = AudioFileClip(audio_path)
@@ -404,7 +444,6 @@ class CyberMediaGenerator:
             video_clips.append(video_clip)
 
         final_clip = concatenate_videoclips(video_clips, method="compose")
-        output_path = os.path.join(self.output_dir, final_video_name)
 
         final_clip.write_videofile(
             output_path,

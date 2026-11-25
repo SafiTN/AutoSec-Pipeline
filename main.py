@@ -1,9 +1,9 @@
-import inspect
 import json
 import logging
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -21,81 +21,32 @@ logging.basicConfig(
 logger = logging.getLogger("AutoSec.Main")
 
 
-def _invoke_media_generator(
-    media_gen: CyberMediaGenerator,
-    scenes: List[Dict[str, str]],
-    episode_title: str,
-    output_path: str,
-    cve_id: Optional[str] = None,
-    severity: Optional[str] = None,
-) -> Optional[str]:
-    """استدعاء وحدة توليد الفيديو بمرونة عبر أسماء الدوال الشائعة في CyberMediaGenerator."""
-    candidate_methods = [
-        "generate_video",
-        "create_video",
-        "render_video",
-        "build_video",
-        "generate_episode",
-        "create_episode",
-    ]
+def _output_dir(settings: Dict[str, Any]) -> str:
+    """Return the absolute output directory from paths.output_dir."""
+    paths_cfg = settings.get("paths", {}) if settings else {}
+    return str(resolve_project_path(paths_cfg.get("output_dir", "output")))
 
-    for method_name in candidate_methods:
-        fn = getattr(media_gen, method_name, None)
-        if not callable(fn):
-            continue
 
-        sig = inspect.signature(fn)
-        params = sig.parameters
-        kwargs: Dict[str, Any] = {}
+def _manifest_path(settings: Dict[str, Any]) -> str:
+    """Return the absolute manifest path (paths.output_dir / paths.manifest_filename)."""
+    paths_cfg = settings.get("paths", {}) if settings else {}
+    output_dir = paths_cfg.get("output_dir", "output")
+    manifest_filename = paths_cfg.get("manifest_filename", "last_episode_manifest.json")
+    return str(resolve_project_path(os.path.join(output_dir, manifest_filename)))
 
-        for name in params:
-            if name == "self":
-                continue
-            if name in {"scenes", "script_scenes", "items"}:
-                kwargs[name] = scenes
-            elif name in {"title", "episode_title", "topic"}:
-                kwargs[name] = episode_title
-            elif name in {"output_path", "out_path", "filename", "output_file"}:
-                kwargs[name] = output_path
-            elif name in {"voice", "tts_voice"}:
-                kwargs[name] = "en-US-GuyNeural"
-            elif name == "cve_id" and cve_id:
-                kwargs[name] = cve_id
-            elif name == "severity" and severity:
-                kwargs[name] = severity
 
-        try:
-            if kwargs:
-                result = fn(**kwargs)
-            else:
-                req_count = sum(
-                    1
-                    for p in params.values()
-                    if p.default is inspect.Parameter.empty
-                    and p.kind
-                    in (
-                        inspect.Parameter.POSITIONAL_ONLY,
-                        inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    )
-                )
-                positional_args = [scenes, output_path] if req_count >= 2 else [scenes]
-                result = fn(*positional_args)
-
-            if isinstance(result, str) and result.strip():
-                return result
-            if os.path.exists(output_path):
-                return output_path
-            return output_path
-        except TypeError as exc:
-            logger.warning("[Main] Signature mismatch for MediaGenerator.%s: %s", method_name, exc)
-            continue
-
-    logger.error("[Main] No compatible video generation method found on MediaGenerator.")
-    return None
+def _video_filename(settings: Dict[str, Any], is_sample: bool) -> str:
+    """Return the video file name from paths.default_video_filename (sample_ prefix for samples)."""
+    paths_cfg = settings.get("paths", {}) if settings else {}
+    name = paths_cfg.get("default_video_filename", "cyber_episode.mp4")
+    name = Path(str(name)).name  # strip any directory parts so '..' cannot escape
+    if name in ("", ".", ".."):
+        name = "cyber_episode.mp4"
+    return f"sample_{name}" if is_sample else name
 
 
 def _covered_cves_path(settings: Dict[str, Any]) -> str:
-    """تحديد المسار المطلق لملف حالة الثغرات المُنشورة سابقاً (covered_cves.json)."""
+    """Return the absolute path of the covered-CVE state file (covered_cves.json)."""
     paths_cfg = settings.get("paths", {}) if settings else {}
     output_dir = paths_cfg.get("output_dir", "output")
     covered_filename = paths_cfg.get("covered_cves_filename", "covered_cves.json")
@@ -103,7 +54,7 @@ def _covered_cves_path(settings: Dict[str, Any]) -> str:
 
 
 def _read_covered_cves_raw(settings: Dict[str, Any]) -> Dict[str, Any]:
-    """قراءة ملف الثغرات المُغطاة بأمان: ملف مفقود أو تالف يُرجع قاموساً فارغاً دون توقف."""
+    """Read the covered-CVE file safely: a missing or corrupt file yields an empty dict."""
     path = _covered_cves_path(settings)
     if not os.path.exists(path):
         return {}
@@ -125,12 +76,12 @@ def _read_covered_cves_raw(settings: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _load_covered_cve_ids(settings: Dict[str, Any]) -> Set[str]:
-    """تحميل مجموعة معرّفات الثغرات التي سبق نشرها لتفادي التكرار بين التشغيلات."""
+    """Load the set of CVE ids already published, to avoid repeats across runs."""
     return set(_read_covered_cves_raw(settings).keys())
 
 
 def _record_covered_cve(settings: Dict[str, Any], cve_id: str) -> None:
-    """تسجيل ثغرة حقيقية تم نشرها بنجاح في ملف الحالة الدائم عبر التشغيلات."""
+    """Record a real, successfully rendered CVE in the persistent state file."""
     path = _covered_cves_path(settings)
     covered = _read_covered_cves_raw(settings)
     covered[cve_id] = datetime.now(timezone.utc).isoformat()
@@ -144,7 +95,7 @@ def _select_primary_advisory(
     advisories: List[Dict[str, Any]],
     covered_cve_ids: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
-    """اختيار الثغرة الأعلى خطورة (CVSS) من بين المرشحات غير المُغطاة سابقاً وذات درجة CVSS معروفة."""
+    """Pick the highest-CVSS advisory among uncovered candidates with a known CVSS score."""
     if not advisories:
         raise ValueError("No CVE advisories available to select from")
 
@@ -168,7 +119,7 @@ def _select_primary_advisory(
     return max(uncovered, key=lambda item: float(item.get("cvss_score") or 0.0))
 
 def _normalize_scenes_for_media(scenes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """ضمان وجود المفاتيح التي تتوقعها build_video مثل visual_text."""
+    """Ensure the keys build_video expects (e.g. visual_text) are present."""
     normalized: List[Dict[str, Any]] = []
     for idx, sc in enumerate(scenes, start=1):
         item = dict(sc)
@@ -191,7 +142,7 @@ def run_pipeline(
     cve_limit: Optional[int] = None,
     max_scenes: int = 3,
 ) -> Dict[str, Any]:
-    """تشغيل الخط الكامل: التحقق الذاتي -> جلب الثغرات -> كتابة السيناريو -> إنتاج الفيديو."""
+    """Run the full pipeline: self-check -> fetch CVEs -> write script -> render video."""
     settings = load_settings()
     effective_cve_limit = (
         cve_limit if cve_limit is not None else settings.get("nvd", {}).get("max_results", 10)
@@ -234,19 +185,30 @@ def run_pipeline(
         episode_script["episode_title"] = episode_title
 
     logger.info("[Main] Step 4/4: Generating video via CyberMediaGenerator...")
-    os.makedirs("output", exist_ok=True)
-    output_video_path = os.path.abspath("autosec_master_episode.mp4")
+    os.makedirs(_output_dir(settings), exist_ok=True)
+    final_video_name = _video_filename(settings, is_sample)
 
     media_scenes = _normalize_scenes_for_media(scenes)
     media_gen = CyberMediaGenerator(settings=settings)
-    generated_video = _invoke_media_generator(
-        media_gen=media_gen,
-        scenes=media_scenes,
-        episode_title=episode_title,
-        output_path=output_video_path,
-        cve_id=selected_cve.get("cve_id"),
-        severity=selected_cve.get("severity"),
-    )
+    generated_video: Optional[str] = None
+    render_error: Optional[str] = None
+    try:
+        returned = media_gen.build_video(
+            media_scenes,
+            final_video_name,
+            selected_cve.get("cve_id"),
+            selected_cve.get("severity"),
+            is_sample=is_sample,
+        )
+        if isinstance(returned, str) and os.path.isfile(returned):
+            generated_video = returned
+        else:
+            logger.error("[Main] build_video did not produce a file (returned %r).", returned)
+            render_error = "video file was not produced"
+    except Exception as exc:
+        logger.error("[Main] Video generation failed; continuing without video.", exc_info=True)
+        generated_video = None
+        render_error = f"video generation failed: {type(exc).__name__}"
 
     manifest = {
         "harness_summary": {
@@ -260,10 +222,13 @@ def run_pipeline(
         "selected_cve": selected_cve,
         "is_sample": is_sample,
         "episode_script": episode_script,
+        "prompt_version": episode_script.get("prompt_version"),
         "output_video": generated_video,
+        "render_error": render_error,
     }
 
-    manifest_path = os.path.join("output", "last_episode_manifest.json")
+    manifest_path = _manifest_path(settings)
+    os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
@@ -287,3 +252,6 @@ if __name__ == "__main__":
     print("Title:", result["episode_script"].get("episode_title"))
     print("Scenes count:", len(result["episode_script"].get("scenes", [])))
     print("Video output:", result.get("output_video"))
+    if not result.get("output_video"):
+        logger.error("[Main] Video was not produced: %s", result.get("render_error"))
+        sys.exit(1)

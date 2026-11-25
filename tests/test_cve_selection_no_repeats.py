@@ -25,6 +25,7 @@ pre-existing stubbing in tests/test_main_sample_fallback.py).
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -74,8 +75,19 @@ class _StubMediaGeneratorSuccess:
     def __init__(self, settings=None):
         self.settings = settings
 
-    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None, severity=None):
-        return "/fake/output/episode.mp4"
+    def build_video(self, scenes, final_video_name="cyber_episode.mp4", cve_id=None,
+                    severity=None, is_sample=False):
+        out = Path(self.settings["paths"]["output_dir"]) / final_video_name
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"fake-mp4")
+        return str(out)
+
+
+class _StubMediaGeneratorReturnsNone(_StubMediaGeneratorSuccess):
+    """build_video "fails" by returning None (no file produced)."""
+
+    def build_video(self, *args, **kwargs):
+        return None
 
 
 class _StubFetcherReal:
@@ -301,12 +313,8 @@ def test_run_pipeline_media_generation_failure_does_not_record_cve(monkeypatch, 
     monkeypatch.setattr(main, "load_settings", lambda: settings)
     monkeypatch.setattr(main, "NewsFetcher", _StubFetcherReal)
     monkeypatch.setattr(main, "ScriptWriter", _StubScriptWriter)
-    # CyberMediaGenerator is still instantiated by run_pipeline, so stub it out
-    # too (its real __init__ reads settings["media"], which this minimal fake
-    # settings dict intentionally omits); the actual "failure" is simulated by
-    # forcing _invoke_media_generator to return None.
-    monkeypatch.setattr(main, "CyberMediaGenerator", _StubMediaGeneratorSuccess)
-    monkeypatch.setattr(main, "_invoke_media_generator", lambda **kwargs: None)
+    # The "failure" is simulated by build_video returning None (no file).
+    monkeypatch.setattr(main, "CyberMediaGenerator", _StubMediaGeneratorReturnsNone)
 
     manifest = main.run_pipeline(run_harness=False, cve_limit=1, max_scenes=1)
 
