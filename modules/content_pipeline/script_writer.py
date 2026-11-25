@@ -7,8 +7,9 @@ from typing import Any, Dict, List, Optional
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from core.agent_runner import AgentRunner
-from core.config_loader import load_settings
+from core.config_loader import DEFAULT_SETTINGS, load_settings
 from core.prompt_optimizer import PromptOptimizer
+from modules.content_pipeline.script_validator import ScriptValidationError, validate_script
 
 logger = logging.getLogger("AutoSec.ScriptWriter")
 
@@ -20,6 +21,27 @@ class ScriptWriter:
         self.settings = settings or load_settings()
         self.agent = AgentRunner(settings=self.settings)
         self.optimizer = PromptOptimizer(settings=self.settings)
+        rules = dict(self.settings.get("script_validation", {}) or {})
+        self.validation_rules: Dict[str, Any] = rules
+        self.validation_enabled: bool = self._parse_enabled(rules.get("enabled", True))
+        self.max_retries: int = self._parse_max_retries(rules.get("max_retries", 0))
+
+    @staticmethod
+    def _parse_enabled(value: Any) -> bool:
+        """Fail-safe: only a real boolean False disables; odd values keep checking on."""
+        if isinstance(value, bool):
+            return value
+        logger.warning("script_validation.enabled is not a boolean; keeping fact-check ENABLED")
+        return True
+
+    @staticmethod
+    def _parse_max_retries(value: Any) -> int:
+        try:
+            return max(0, int(value))
+        except (ValueError, TypeError):
+            default = DEFAULT_SETTINGS["script_validation"]["max_retries"]
+            logger.warning("script_validation.max_retries is not an integer; using default %d", default)
+            return default
 
     @staticmethod
     def _extract_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
@@ -77,26 +99,21 @@ class ScriptWriter:
             },
         ]
 
-    def generate_episode_script(
+    def _attempt(
         self,
-        advisory: Dict[str, Any],
-        max_scenes: int = 3,
-        style: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """توليد سيناريو حلقة كاملة باللغة الإنجليزية لثغرة أمنية محددة عبر PromptOptimizer."""
-        cve_id = str(advisory.get("cve_id", "CVE-Advisory"))
-        prompts = self.optimizer.build_script_prompts(
-            advisory=advisory,
-            max_scenes=max_scenes,
-            style=style,
-        )
-
+        prompts: Dict[str, str],
+        feedback: Optional[str],
+        max_scenes: int,
+    ) -> Optional[List[Dict[str, str]]]:
+        """One Ollama call: query, parse and sanitize. Returns None when nothing usable was parsed."""
+        user_prompt = prompts["user_prompt"]
+        if feedback:
+            user_prompt = f"{user_prompt}\n\n{feedback}"
         raw_response = self.agent.query_local_agent(
-            prompt=prompts["user_prompt"],
+            prompt=user_prompt,
             system_prompt=prompts["system_prompt"],
         )
         parsed = self._extract_json_payload(raw_response)
-
         scenes: List[Dict[str, str]] = []
         if parsed:
             for idx, sc in enumerate(parsed["scenes"][:max_scenes], start=1):
@@ -112,10 +129,74 @@ class ScriptWriter:
                                 ),
                             }
                         )
+        return scenes or None
 
-        if not scenes:
-            logger.warning("[ScriptWriter] Using deterministic English fallback script for %s.", cve_id)
-            scenes = self._build_fallback_scenes(advisory)[:max_scenes]
+    def _validate(self, scenes: List[Dict[str, str]], advisory: Dict[str, Any]) -> List[str]:
+        return validate_script(scenes, advisory, self.validation_rules)
+
+    def _generate_validated(
+        self,
+        advisory: Dict[str, Any],
+        prompts: Dict[str, str],
+        max_scenes: int,
+        cve_id: str,
+    ) -> List[Dict[str, str]]:
+        total = 1 + self.max_retries
+        feedback: Optional[str] = None
+        last_violations: List[str] = []
+        parsed_any = False
+        for attempt in range(1, total + 1):
+            scenes = self._attempt(prompts, feedback, max_scenes)
+            if scenes is None:
+                logger.warning("[ScriptWriter] Attempt %d/%d for %s was unparseable.", attempt, total, cve_id)
+                continue
+            parsed_any = True
+            violations = self._validate(scenes, advisory)
+            if not violations:
+                return scenes
+            last_violations = violations
+            logger.warning(
+                "[ScriptWriter] Attempt %d/%d for %s failed fact-check (%d violation(s): %s).",
+                attempt,
+                total,
+                cve_id,
+                len(violations),
+                ", ".join(sorted({v.split(" ")[0] for v in violations})),
+            )
+            feedback = self.optimizer.build_retry_feedback(violations)
+
+        if parsed_any:
+            raise ScriptValidationError(last_violations, total)
+
+        logger.warning("[ScriptWriter] All attempts unparseable; using deterministic fallback for %s.", cve_id)
+        fallback = self._build_fallback_scenes(advisory)[:max_scenes]
+        problems = validate_script(fallback, advisory, self.validation_rules, skip_text_rules=True)
+        if problems:
+            raise ScriptValidationError(problems, total)
+        return fallback
+
+    def generate_episode_script(
+        self,
+        advisory: Dict[str, Any],
+        max_scenes: int = 3,
+        style: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """توليد سيناريو حلقة كاملة باللغة الإنجليزية لثغرة أمنية محددة عبر PromptOptimizer."""
+        cve_id = str(advisory.get("cve_id", "CVE-Advisory"))
+        prompts = self.optimizer.build_script_prompts(
+            advisory=advisory,
+            max_scenes=max_scenes,
+            style=style,
+        )
+
+        if not self.validation_enabled:
+            logger.warning("[ScriptWriter] Script fact-checking disabled by configuration.")
+            scenes = self._attempt(prompts, None, max_scenes)
+            if not scenes:
+                logger.warning("[ScriptWriter] Using deterministic English fallback script for %s.", cve_id)
+                scenes = self._build_fallback_scenes(advisory)[:max_scenes]
+        else:
+            scenes = self._generate_validated(advisory, prompts, max_scenes, cve_id)
 
         return {
             "language": self.optimizer.default_language,

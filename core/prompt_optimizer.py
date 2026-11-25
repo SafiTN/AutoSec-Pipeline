@@ -89,6 +89,33 @@ Structure the {safe_scenes} scenes logically from vulnerability overview and roo
             "user_prompt": user_prompt,
         }
 
+    @staticmethod
+    def build_retry_feedback(violations: List[str]) -> str:
+        """Build neutral corrective feedback from validator violations.
+
+        Only the rule categories are restated; offending values and forbidden terms
+        are never echoed, so the feedback cannot carry unsafe content back to the model.
+        """
+        categories = [
+            ("CVE id", "Mention only the CVE ID given in the advisory."),
+            ("severity", "State the severity exactly as given in the advisory, or omit severity claims."),
+            ("CVSS", "State the CVSS score exactly as given in the advisory."),
+            ("version", "Do not mention version numbers unless they appear in the advisory; say \"not yet specified\" instead."),
+            ("forbidden term", "Keep the content strictly defensive: no exploit material, attack tooling or step-by-step attack instructions."),
+        ]
+        lines = [
+            hint
+            for prefix, hint in categories
+            if any(v.startswith(prefix) for v in violations)
+        ]
+        if not lines:
+            lines = ["Use advisory facts only."]
+        body = "\n".join(f"- {line}" for line in lines)
+        return (
+            "Your previous script did not pass fact-checking. Regenerate it using advisory facts only, "
+            "for a defensive audience, as the same JSON object.\n" + body
+        )
+
     def optimize_agent_prompt(
         self,
         base_prompt: str,

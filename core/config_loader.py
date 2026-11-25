@@ -44,6 +44,20 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "style": "concise_technical",
         "default_max_scenes": 3,
     },
+    "script_validation": {
+        "enabled": True,
+        "max_retries": 2,
+        "forbidden_terms": [
+            "payload",
+            "exploit code",
+            "shellcode",
+            "reverse shell",
+            "proof of concept",
+            "poc",
+            "step-by-step exploit",
+            "weaponiz",
+        ],
+    },
     "media": {
         "tts_voice": "en-US-GuyNeural",
         "fps": 24,
