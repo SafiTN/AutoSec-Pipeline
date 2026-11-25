@@ -199,10 +199,13 @@ Order matters: P0 first. Each item lists acceptance criteria (AC).
   Risks: (a) the T24 overlap on real encode: keep T12 stubbed (AC 4b) and T24 real, or the suite gets slow/flaky on CI; (b) a coverage gate set too tight will block unrelated PRs: gate = baseline minus 2 points, and `__main__` blocks/ demo code excluded via `# pragma: no cover` or `.coveragerc` omit (no production logic changes); (c) tests asserting on `NvdFetchError`/fallback semantics must match the current T01/T02 behaviour, not a re-interpretation, so write them from the code, and report any behavioural surprise instead of changing production code silently.
 - **T12b Coverage for low-coverage core modules** — TODO — qa-engineer
   Surfaced by T12 baseline. AC: add mocked tests (no network/Ollama) raising `core/agent_runner.py` (46%), `core/harness_loop.py` (68%), `modules/evaluation/judge_evaluator.py` (76%) to >= 80% each; then raise `--cov-fail-under` in workflow and README (never lower).
-- **T13 CI hardening** — TODO — devops-engineer
+- **T13 CI hardening** — DONE (2026-11-25) — devops-engineer
+  Result: actions pinned to SHAs; ruff check (+ruff.toml, format not enforced) in CI; ffmpeg/fonts; scheduled dry-run workflow; persist-credentials false, timeout, concurrency; 514 passed, 88.46% cov. Security: no High/Medium. Follow-ups: T13b.
   Note from T12 security review (Medium): `actions/upload-artifact` (added in T12) must also be pinned to a commit SHA together with checkout/setup-python.
   AC: ruff/format check, pytest, ffmpeg + font available, scheduled (cron) dry-run workflow, caching.
   Added (devops findings from T09 CI check, 2026-11-25): replace ad-hoc `pip install pytest` in `auto_pipeline.yml` with a `requirements-dev.txt` (pytest, ruff); add ruff lint step; pin third-party actions (`actions/checkout`, `actions/setup-python`) to commit SHAs.
+- **T13b CI follow-ups** — TODO — devops-engineer
+  Dependabot (github-actions, pip); one-time `ruff format` commit then enforce `format --check`; guard/comment that manual full-run never publishes and `allow_fallback` stays false; README note that scheduled workflows pause after 60 days of inactivity; consider action major bumps (v7).
 - **T14 README sync** — TODO — project-manager
   AC: roadmap reflects reality, clone URL fixed, config table matches `settings.yaml`.
 - **T15 Human review gate** — TODO — pipeline-developer
