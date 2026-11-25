@@ -138,6 +138,8 @@ Execute the unit test suite using `pytest`:
 python -m pytest -v
 ```
 
+Run with coverage (same gate as CI, fails below 86%): `pip install -r requirements-dev.txt && python -m pytest --cov=core --cov=modules --cov-report=term --cov-fail-under=86`
+
 ---
 
 ## Roadmap
