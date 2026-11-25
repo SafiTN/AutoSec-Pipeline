@@ -82,9 +82,32 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     },
     "harness": {
         "enabled_by_default": False,
+        "max_iterations": 3,
+        "target_score": 90.0,
         "pass_threshold": 80.0,
     },
 }
+
+
+def get_harness_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Return the validated harness section merged over defaults.
+
+    Raises ValueError for invalid values (never clamps silently).
+    """
+    cfg = _deep_merge(DEFAULT_SETTINGS["harness"], (settings or {}).get("harness") or {})
+    max_iter = cfg["max_iterations"]
+    if isinstance(max_iter, bool) or not isinstance(max_iter, int) or max_iter < 1:
+        raise ValueError(f"harness.max_iterations must be an int >= 1, got {max_iter!r}")
+    for key in ("pass_threshold", "target_score"):
+        val = cfg[key]
+        if isinstance(val, bool) or not isinstance(val, (int, float)):
+            raise ValueError(f"harness.{key} must be a number, got {val!r}")
+    if not (0 <= cfg["pass_threshold"] <= cfg["target_score"] <= 100):
+        raise ValueError(
+            "harness requires 0 <= pass_threshold <= target_score <= 100, got "
+            f"pass_threshold={cfg['pass_threshold']!r}, target_score={cfg['target_score']!r}"
+        )
+    return cfg
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:

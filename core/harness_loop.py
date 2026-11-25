@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from core.agent_runner import AgentRunner
-from core.config_loader import load_settings
+from core.config_loader import get_harness_config, load_settings
 from modules.evaluation.judge_evaluator import JudgeEvaluator
 
 logging.basicConfig(
@@ -20,11 +20,11 @@ class AutoHarnessLoop:
 
     def __init__(self, settings: Optional[Dict[str, Any]] = None):
         self.settings = settings or load_settings()
-        harness_cfg = self.settings.get("harness", {})
+        harness_cfg = get_harness_config(self.settings)
         ai_cfg = self.settings.get("ai", {})
 
-        self.max_iterations: int = harness_cfg.get("max_iterations", 3)
-        self.target_score: float = harness_cfg.get("target_score", 90.0)
+        self.max_iterations: int = harness_cfg["max_iterations"]
+        self.target_score: float = harness_cfg["target_score"]
         self.base_temperature: float = ai_cfg.get("temperature", 0.1)
 
         self.agent = AgentRunner(settings=self.settings)

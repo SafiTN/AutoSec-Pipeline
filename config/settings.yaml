@@ -88,7 +88,9 @@ sandbox:   # best-effort limits, NOT a security boundary (see docs/adr/0003)
 
 harness:
   enabled_by_default: false
-  pass_threshold: 80.0
+  max_iterations: 3          # max repair attempts per task (int >= 1)
+  target_score: 90.0         # stop early once a passing attempt reaches this score
+  pass_threshold: 80.0       # minimum judge score for a candidate to count as passed
 
 ai:
   provider: "ollama"
