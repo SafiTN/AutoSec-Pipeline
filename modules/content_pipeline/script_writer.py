@@ -3,15 +3,95 @@ import logging
 import os
 import re
 import sys
+import unicodedata
 from typing import Any, Dict, List, Optional
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from core.agent_runner import AgentRunner
 from core.config_loader import DEFAULT_SETTINGS, load_settings
-from core.prompt_optimizer import PromptOptimizer
+from core.prompt_optimizer import PROMPT_VERSION, PromptOptimizer
 from modules.content_pipeline.script_validator import ScriptValidationError, validate_script
 
 logger = logging.getLogger("AutoSec.ScriptWriter")
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Cut at a word boundary when possible; never exceeds `limit` characters."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rstrip()
+    if " " in cut and text[limit] != " ":
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:-")
+
+
+def _strip_cf(text: str) -> str:
+    """Drop format chars (zero-width, bidi overrides) so stored text equals validated text."""
+    return "".join(c for c in text if unicodedata.category(c) != "Cf")
+
+
+def _first_sentence(text: str) -> str:
+    match = re.match(r"\s*(.+?[.!?])(?:\s|$)", text, flags=re.DOTALL)
+    return match.group(1) if match else text
+
+
+def normalize_scenes(
+    raw_scenes: Any,
+    max_scenes: int,
+    optimizer: PromptOptimizer,
+) -> List[Dict[str, Any]]:
+    """Pure, never-raising normalization of model scenes into the v2 schema.
+
+    Scenes without usable narration are dropped. Missing `key_takeaway` is derived from
+    the narration; missing/invalid `on_screen_bullets` become []. Legacy 3-key scenes pass.
+    """
+    scenes: List[Dict[str, Any]] = []
+    if not isinstance(raw_scenes, list):
+        return scenes
+    def clean(t: str) -> str:
+        return optimizer.clean_text(_strip_cf(t))
+
+    def tts(t: str) -> str:
+        return optimizer.sanitize_for_tts_hints(_strip_cf(t))
+
+    for idx, sc in enumerate(raw_scenes[: max(0, int(max_scenes))], start=1):
+        if not isinstance(sc, dict) or not isinstance(sc.get("narration"), str):
+            continue
+        narration = tts(sc["narration"])
+        if not narration:
+            continue
+
+        def text(key: str, default: str) -> str:
+            value = sc.get(key)
+            return clean(value) if isinstance(value, str) and clean(value) else default
+
+        takeaway = tts(sc["key_takeaway"]) if isinstance(sc.get("key_takeaway"), str) else ""
+        takeaway = _truncate(takeaway or _first_sentence(narration), optimizer.max_takeaway_chars)
+
+        raw_bullets = sc.get("on_screen_bullets")
+        if isinstance(raw_bullets, str):
+            raw_bullets = [raw_bullets]
+        bullets: List[str] = []
+        for item in raw_bullets if isinstance(raw_bullets, list) else []:
+            if not isinstance(item, str):
+                continue
+            words = tts(item).split()
+            bullet = _truncate(" ".join(words[:8]), optimizer.max_bullet_chars)
+            if bullet:
+                bullets.append(bullet)
+            if len(bullets) >= optimizer.max_bullets:
+                break
+
+        scenes.append(
+            {
+                "title": text("title", f"Scene {idx}"),
+                "narration": narration,
+                "key_takeaway": takeaway,
+                "on_screen_bullets": bullets,
+                "visual_cue": text("visual_cue", "Technical security slide"),
+            }
+        )
+    return scenes
 
 
 class ScriptWriter:
@@ -76,17 +156,21 @@ class ScriptWriter:
             {
                 "title": f"{cve_id} Overview",
                 "narration": (
-                    f"Today we examine {cve_id}, a security advisory rated {severity} with a CVSS score of {score}. "
-                    f"Understanding how this flaw behaves helps engineering teams prioritize patching and exposure checks."
+                    f"Security advisory {cve_id} is rated {severity} with a CVSS score of {score}. "
+                    f"Understanding how this flaw behaves helps teams prioritize patching and exposure checks."
                 ),
+                "key_takeaway": "Check whether your systems are affected and plan a patch.",
+                "on_screen_bullets": [cve_id, f"Severity {severity}", f"CVSS {score}"],
                 "visual_cue": f"Title card showing {cve_id} and CVSS {score} ({severity})",
             },
             {
                 "title": "Technical Impact & Root Cause",
                 "narration": (
                     f"At a technical level, {short_summary}. "
-                    f"Attackers who exploit conditions like this often target unvalidated inputs, trust boundaries, or misconfigured routing."
+                    f"Weaknesses like this often involve unvalidated inputs, trust boundaries, or misconfigured routing."
                 ),
+                "key_takeaway": "Weak input validation and trust boundaries are common root causes.",
+                "on_screen_bullets": ["What the flaw is", "Who may be affected", "Why it matters"],
                 "visual_cue": "Architecture diagram highlighting trust boundary and request flow",
             },
             {
@@ -95,6 +179,8 @@ class ScriptWriter:
                     "To defend against this class of vulnerability, apply official vendor patches promptly and enforce strict input validation. "
                     "Always verify security controls in an isolated test environment before rolling changes into production."
                 ),
+                "key_takeaway": "Patch promptly, then verify. Fixed version is not yet specified here.",
+                "on_screen_bullets": ["Apply vendor patch", "Limit exposure", "Verify in test first"],
                 "visual_cue": "Checklist of patch verification, least privilege, and regression testing",
             },
         ]
@@ -114,25 +200,28 @@ class ScriptWriter:
             system_prompt=prompts["system_prompt"],
         )
         parsed = self._extract_json_payload(raw_response)
-        scenes: List[Dict[str, str]] = []
-        if parsed:
-            for idx, sc in enumerate(parsed["scenes"][:max_scenes], start=1):
-                if isinstance(sc, dict) and sc.get("narration"):
-                    clean_narration = self.optimizer.sanitize_for_tts_hints(str(sc["narration"]))
-                    if clean_narration:
-                        scenes.append(
-                            {
-                                "title": self.optimizer.clean_text(str(sc.get("title") or f"Scene {idx}")),
-                                "narration": clean_narration,
-                                "visual_cue": self.optimizer.clean_text(
-                                    str(sc.get("visual_cue") or "Technical security slide")
-                                ),
-                            }
-                        )
+        scenes = normalize_scenes(parsed["scenes"], max_scenes, self.optimizer) if parsed else []
         return scenes or None
 
-    def _validate(self, scenes: List[Dict[str, str]], advisory: Dict[str, Any]) -> List[str]:
-        return validate_script(scenes, advisory, self.validation_rules)
+    @staticmethod
+    def _validation_view(scenes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Scenes plus extra pseudo-scenes carrying takeaway/bullet text, so the T06
+        validator checks them with the same rules (validator itself is unchanged)."""
+        view: List[Dict[str, Any]] = list(scenes)
+        for sc in scenes:
+            extras = [sc.get("key_takeaway", "")] + list(sc.get("on_screen_bullets") or [])
+            view.extend({"narration": e} for e in extras if isinstance(e, str) and e)
+            joined = " ".join(e for e in extras if isinstance(e, str) and e)
+            if joined:
+                view.append({"narration": joined})
+        return view
+
+    def _validate(
+        self, scenes: List[Dict[str, Any]], advisory: Dict[str, Any], skip_text_rules: bool = False
+    ) -> List[str]:
+        return validate_script(
+            self._validation_view(scenes), advisory, self.validation_rules, skip_text_rules=skip_text_rules
+        )
 
     def _generate_validated(
         self,
@@ -170,7 +259,7 @@ class ScriptWriter:
 
         logger.warning("[ScriptWriter] All attempts unparseable; using deterministic fallback for %s.", cve_id)
         fallback = self._build_fallback_scenes(advisory)[:max_scenes]
-        problems = validate_script(fallback, advisory, self.validation_rules, skip_text_rules=True)
+        problems = self._validate(fallback, advisory, skip_text_rules=True)
         if problems:
             raise ScriptValidationError(problems, total)
         return fallback
@@ -180,6 +269,7 @@ class ScriptWriter:
         advisory: Dict[str, Any],
         max_scenes: int = 3,
         style: Optional[str] = None,
+        hook_style: Optional[str] = None,
     ) -> Dict[str, Any]:
         """توليد سيناريو حلقة كاملة باللغة الإنجليزية لثغرة أمنية محددة عبر PromptOptimizer."""
         cve_id = str(advisory.get("cve_id", "CVE-Advisory"))
@@ -187,6 +277,7 @@ class ScriptWriter:
             advisory=advisory,
             max_scenes=max_scenes,
             style=style,
+            hook_style=hook_style,
         )
 
         if not self.validation_enabled:
@@ -201,6 +292,7 @@ class ScriptWriter:
         return {
             "language": self.optimizer.default_language,
             "cve_id": cve_id,
+            "prompt_version": PROMPT_VERSION,
             "episode_title": f"{cve_id}: Technical Breakdown & Defense",
             "scenes": scenes,
         }

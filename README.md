@@ -96,6 +96,7 @@ Pipeline behavior is controlled via `config/settings.yaml`:
 
 * **LLM Settings**: Ollama endpoint URL, model name (`qwen2.5-coder:7b`), temperature, and timeout parameters.
 * **NVD / Advisory Settings**: Lookback window, maximum advisories fetched, and fallback behavior.
+* **Prompt Settings** (`prompt_optimizer:`, prompt `PROMPT_VERSION = "v2"`): `hook_rotation` and `hook_styles` (`question`/`number`/`scenario`, picked deterministically from the CVE id), `max_bullets`, `max_bullet_chars`, `max_takeaway_chars`, `max_hook_words`. Each scene now also carries `key_takeaway` (one sentence) and `on_screen_bullets` (up to 3 short strings). Both are fact-checked like narration; slide rendering of them is not implemented yet. Old 3-key scenes are still accepted.
 * **Media Settings**:
   * `output_directory`: Target folder for generated audio and final `.mp4` videos.
   * `slides_directory`: Target folder for rendered `.png` scene slides.
