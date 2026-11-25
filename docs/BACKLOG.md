@@ -204,8 +204,9 @@ Order matters: P0 first. Each item lists acceptance criteria (AC).
   Note from T12 security review (Medium): `actions/upload-artifact` (added in T12) must also be pinned to a commit SHA together with checkout/setup-python.
   AC: ruff/format check, pytest, ffmpeg + font available, scheduled (cron) dry-run workflow, caching.
   Added (devops findings from T09 CI check, 2026-11-25): replace ad-hoc `pip install pytest` in `auto_pipeline.yml` with a `requirements-dev.txt` (pytest, ruff); add ruff lint step; pin third-party actions (`actions/checkout`, `actions/setup-python`) to commit SHAs.
-- **T13b CI follow-ups** — TODO — devops-engineer
+- **T13b CI follow-ups** — DONE — devops-engineer
   Dependabot (github-actions, pip); one-time `ruff format` commit then enforce `format --check`; guard/comment that manual full-run never publishes and `allow_fallback` stays false; README note that scheduled workflows pause after 60 days of inactivity; consider action major bumps (v7).
+  Result: dependabot.yml (weekly, github-actions + pip, no auto-merge); one-time ruff format commit and `ruff format --check` in both workflows; allow_fallback guard and no-publish comment in manual full run; README 60-day pause note; action major bumps left to Dependabot.
 - **T14 README sync** — TODO — project-manager
   AC: roadmap reflects reality, clone URL fixed, config table matches `settings.yaml`.
 - **T15 Human review gate** — TODO — pipeline-developer

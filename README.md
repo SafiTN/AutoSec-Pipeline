@@ -146,7 +146,7 @@ Lint (same as CI): `ruff check .` (config in `ruff.toml`; formatting is not enfo
 
 ## Scheduling
 
-* **CI (GitHub Actions):** `.github/workflows/scheduled_dry_run.yml` runs weekly (Mondays 05:17 UTC) as an offline dry run: ruff, config validation and pytest. It never calls NVD or Ollama and uploads nothing.
+* **CI (GitHub Actions):** `.github/workflows/scheduled_dry_run.yml` runs weekly (Mondays 05:17 UTC) as an offline dry run: ruff, config validation and pytest. It never calls NVD or Ollama and uploads nothing. GitHub pauses scheduled workflows after 60 days without repository activity; re-enable the workflow in the Actions tab or push a commit.
 * **Full local runs** (need Ollama and internet):
   * Linux/macOS cron, daily at 09:00: `0 9 * * * cd /path/to/AutoSec-Pipeline && ./venv/bin/python main.py >> output/cron.log 2>&1`
   * Windows Task Scheduler: `schtasks /Create /SC DAILY /ST 09:00 /TN "AutoSecPipeline" /TR "cmd /c cd /d D:\path	o\AutoSec-Pipeline && venv\Scripts\python.exe main.py >> output	ask.log 2>&1"`
