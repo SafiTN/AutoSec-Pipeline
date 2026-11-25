@@ -30,6 +30,19 @@ prompt_optimizer:
   style: "concise_technical"
   default_max_scenes: 3
 
+script_validation:
+  enabled: true
+  max_retries: 2   # extra LLM attempts after the first
+  forbidden_terms:
+    - "payload"
+    - "exploit code"
+    - "shellcode"
+    - "reverse shell"
+    - "proof of concept"
+    - "poc"
+    - "step-by-step exploit"
+    - "weaponiz"
+
 media:
   output_directory: "output_media"
   slides_directory: "output_media/slides"
