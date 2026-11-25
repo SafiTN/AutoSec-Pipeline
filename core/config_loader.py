@@ -43,6 +43,12 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "language": "en",
         "style": "concise_technical",
         "default_max_scenes": 3,
+        "hook_rotation": True,
+        "hook_styles": ["question", "number", "scenario"],
+        "max_bullets": 3,
+        "max_bullet_chars": 48,
+        "max_takeaway_chars": 160,
+        "max_hook_words": 25,
     },
     "script_validation": {
         "enabled": True,
