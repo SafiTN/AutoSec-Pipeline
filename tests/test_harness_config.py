@@ -45,7 +45,9 @@ def test_bad_max_iterations(bad):
 
 
 @pytest.mark.parametrize("key", ["pass_threshold", "target_score"])
-@pytest.mark.parametrize("bad", [True, "80", None])
+@pytest.mark.parametrize(
+    "bad", [True, "80", None, float("nan"), float("inf"), -float("inf")]
+)
 def test_non_number_scores(key, bad):
     with pytest.raises(ValueError):
         get_harness_config(_h(**{key: bad}))
