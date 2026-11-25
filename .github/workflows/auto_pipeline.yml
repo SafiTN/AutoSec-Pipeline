@@ -44,6 +44,9 @@ jobs:
         run: |
           ruff check .
 
+      - name: Check formatting with ruff
+        run: ruff format --check .
+
       - name: Install ffmpeg
         run: |
           sudo apt-get update
@@ -65,6 +68,29 @@ jobs:
           path: coverage.xml
           if-no-files-found: ignore
           retention-days: 7
+
+      # SAFETY: this manual run must never publish or upload anything. No upload
+      # credentials are configured here and none may be added without owner approval.
+      - name: Guard against allow_fallback in manual full run
+        if: github.event_name == 'workflow_dispatch' && inputs.run_full_pipeline == 'true'
+        run: |
+          python - <<'PY'
+          import sys
+          import yaml
+          with open("config/settings.yaml", encoding="utf-8") as fh:
+              cfg = yaml.safe_load(fh) or {}
+          hits = []
+          def walk(node, path=""):
+              if isinstance(node, dict):
+                  for k, v in node.items():
+                      walk(v, f"{path}.{k}" if path else str(k))
+              elif path.split(".")[-1] == "allow_fallback" and node is True:
+                  hits.append(path)
+          walk(cfg)
+          if hits:
+              sys.exit(f"allow_fallback must be false for CI runs: {hits}")
+          print("allow_fallback is false: ok")
+          PY
 
       - name: Optionally run full pipeline on manual dispatch
         if: github.event_name == 'workflow_dispatch' && inputs.run_full_pipeline == 'true'

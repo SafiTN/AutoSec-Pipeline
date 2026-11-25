@@ -43,6 +43,9 @@ jobs:
       - name: Lint with ruff
         run: ruff check .
 
+      - name: Check formatting with ruff
+        run: ruff format --check .
+
       - name: Validate configuration loader
         run: python -m core.config_loader
 

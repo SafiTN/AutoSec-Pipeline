@@ -1,12 +1,15 @@
-# Minimal, conservative lint config (T13). Formatting is not enforced in CI:
-# `ruff format` would rewrite most files, so it is left for a dedicated change.
+# Lint and format config (T13/T13b). CI enforces `ruff check` and `ruff format --check`.
 line-length = 120
 target-version = "py310"
 extend-exclude = ["venv", ".venv", ".sandbox_runs", "output", "output_media"]
 
+[format]
+# Keep the existing line endings (git normalizes to LF in the index); do not force a style.
+line-ending = "auto"
+
 [lint]
 select = ["E", "F", "W", "I"]
-# E501: long lines are tolerated until a dedicated formatting pass.
+# E501: line length is handled by the formatter.
 ignore = ["E501"]
 
 [lint.isort]
