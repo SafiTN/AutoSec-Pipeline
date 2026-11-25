@@ -5,6 +5,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
+from core.config_loader import get_harness_config
 from modules.cyber_agent.base_harness import HarnessSpec
 from modules.cyber_agent.sandbox_exec import SandboxExecutor
 
@@ -12,11 +13,12 @@ logger = logging.getLogger("AutoSec.JudgeEvaluator")
 
 
 class JudgeEvaluator:
-    """مُقيّم موضوعي للأكواد الأمنية المولدة بالاعتماد على التنفيذ المعزول ومقاييس الجودة."""
+    """Objective judge for generated security code, based on sandboxed execution and quality metrics."""
 
     def __init__(self, scoring_set_path: str = "modules/evaluation/scoring_sets.json", settings: Optional[Dict[str, Any]] = None):
         self.scoring_set_path = scoring_set_path
         self.settings = settings or {}
+        self.pass_threshold: float = get_harness_config(self.settings)["pass_threshold"]
         self.sandbox = SandboxExecutor(settings=self.settings)
 
     def load_tasks(self) -> List[Dict[str, Any]]:
@@ -126,7 +128,7 @@ class JudgeEvaluator:
         return {
             "task_id": task["task_id"],
             "category": task.get("category", ""),
-            "passed": exec_result["passed"] and total_score >= 80.0,
+            "passed": exec_result["passed"] and total_score >= self.pass_threshold,
             "total_score": total_score,
             "breakdown": {
                 "execution": exec_score,
