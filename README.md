@@ -106,7 +106,8 @@ AutoSec-Pipeline/
 Pipeline behavior is controlled via `config/settings.yaml` (comments in that file are authoritative; defaults live in `core/config_loader.py`):
 
 * **`project`**: `name`, `version`, `log_level`.
-* **`paths`**: `output_dir`, `media_dir`, `default_video_filename`, `manifest_filename`, `covered_cves_filename`.
+* **`paths`**: `output_dir`, `media_dir`, `default_video_filename`, `manifest_filename`, `covered_cves_filename`, `pending_review_filename` (default `pending_review.json`, under `output_dir`).
+* **`review`** (human review gate, `docs/adr/0004-human-review-gate.md`): `enabled` (default `true`; never applies to sample runs), `cvss_threshold` (`9.0`; CVSS at or above it requires approval), `review_required` (`false`; `true` gates every non-sample run), `fail_closed_on_unknown_cvss` (`true`; unknown or non-numeric CVSS also requires review).
 * **`ollama`**: `base_url`, `model` (`qwen2.5-coder:7b`), `timeout_sec`, `temperature`.
 * **`ai`**: legacy provider block (`provider`, `base_url`, `model`, `timeout_sec`, `temperature`). `AgentRunner` uses it in preference to `ollama` when present, and the harness reads its `temperature`. Keep it in sync with `ollama`.
 * **`nvd`**: `api_url`, `lookback_days`, `max_results`, `default_limit`, `timeout_sec`, `max_retries`, `allow_fallback` (default `false`; when `true`, an unreachable NVD yields a sample advisory marked `is_sample`).
@@ -137,6 +138,16 @@ python main.py
 2. Generates a structured multi-scene script via Ollama.
 3. Synthesizes scene voiceovers (`MP3`) and renders dark-themed scene slides (`PNG`).
 4. Compiles the synchronized video (`MP4`) and writes a detailed run summary to `output/last_episode_manifest.json`.
+
+### Human Review Gate
+When the gate applies (see `review:` above), `python main.py` validates the script, writes `output/pending_review.json` and stops before rendering, with manifest `review_status: "pending"`. Inspect the file, then run:
+
+```bash
+python main.py --approve   # render the video for the pending review
+python main.py --reject    # discard it and mark the CVE covered
+```
+
+`review_status` in the manifest is `not_required`, `pending`, `approved` or `rejected`. Exit codes: `0` success, `1` error, `2` pending human review (not a failure). CI never passes `--approve`/`--reject`; it treats exit 2 as success and emits a notice.
 
 ### Test Media Generation Standalone
 You can test slide rendering and video assembly independently without calling NVD or Ollama:

@@ -290,6 +290,7 @@ def _run_as_main(monkeypatch, tmp_path, produce):
             return str(p)
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["main.py"])  # main.py now parses CLI flags; hide pytest's argv
     monkeypatch.setattr(cl, "load_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(news_fetcher, "NewsFetcher", _Fetcher)
     monkeypatch.setattr(script_writer, "ScriptWriter", _Writer)

@@ -9,6 +9,13 @@ paths:
   default_video_filename: "cyber_episode.mp4"
   manifest_filename: "last_episode_manifest.json"
   covered_cves_filename: "covered_cves.json"
+  pending_review_filename: "pending_review.json"  # under paths.output_dir (human review gate, ADR 0004)
+
+review:
+  enabled: true                      # human review gate before rendering (never applies to sample runs)
+  cvss_threshold: 9.0                # CVSS >= this value requires `python main.py --approve`
+  review_required: false             # true = gate every non-sample run
+  fail_closed_on_unknown_cvss: true  # unknown/non-numeric CVSS also requires review
 
 ollama:
   base_url: "http://localhost:11434"

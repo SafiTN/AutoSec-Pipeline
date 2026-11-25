@@ -98,4 +98,13 @@ jobs:
           OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL || 'http://localhost:11434' }}
           OLLAMA_MODEL: ${{ secrets.OLLAMA_MODEL || 'qwen2.5-coder:7b' }}
         run: |
+          # Exit 2 = pending human review (ADR 0004): not a failure. Never pass --approve/--reject in CI.
+          set +e
           python main.py
+          rc=$?
+          set -e
+          if [ "$rc" -eq 2 ]; then
+            echo "::notice::Pipeline is pending human review (exit 2); approve or reject locally."
+          elif [ "$rc" -ne 0 ]; then
+            exit "$rc"
+          fi

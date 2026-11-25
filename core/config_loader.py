@@ -23,6 +23,13 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "default_video_filename": "cyber_episode.mp4",
         "manifest_filename": "last_episode_manifest.json",
         "covered_cves_filename": "covered_cves.json",
+        "pending_review_filename": "pending_review.json",
+    },
+    "review": {
+        "enabled": True,
+        "cvss_threshold": 9.0,
+        "review_required": False,
+        "fail_closed_on_unknown_cvss": True,
     },
     "ollama": {
         "base_url": "http://localhost:11434",
@@ -107,6 +114,21 @@ def get_harness_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str, A
             "harness requires 0 <= pass_threshold <= target_score <= 100, got "
             f"pass_threshold={cfg['pass_threshold']!r}, target_score={cfg['target_score']!r}"
         )
+    return cfg
+
+
+def get_review_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Return the validated review-gate section merged over defaults (ADR 0004).
+
+    Raises ValueError for invalid values (never coerces silently).
+    """
+    cfg = _deep_merge(DEFAULT_SETTINGS["review"], (settings or {}).get("review") or {})
+    for key in ("enabled", "review_required", "fail_closed_on_unknown_cvss"):
+        if not isinstance(cfg[key], bool):
+            raise ValueError(f"review.{key} must be a boolean, got {cfg[key]!r}")
+    threshold = cfg["cvss_threshold"]
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not (0 <= threshold <= 10):
+        raise ValueError(f"review.cvss_threshold must be a number in [0, 10], got {threshold!r}")
     return cfg
 
 
