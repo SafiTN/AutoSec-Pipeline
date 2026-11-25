@@ -10,7 +10,7 @@ class HarnessSpec:
     target_code: str
     test_code: str = ""
     timeout_sec: int = 10
-    allowed_imports: List[str] = field(default_factory=lambda: ["math", "re", "json", "urllib.parse", "os"])
+    allowed_imports: List[str] = field(default_factory=lambda: ["math", "re", "json", "urllib.parse"])
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

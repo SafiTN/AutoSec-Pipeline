@@ -13,5 +13,9 @@ output_media/
 
 # Environment & local secrets
 .env
-*.localvenvvenv/ 
+*.local
+venvvenv/
 .idea/
+
+# Sandbox scratch runs
+.sandbox_runs/
