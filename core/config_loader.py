@@ -72,6 +72,14 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
             "height": 720,
         },
     },
+    "sandbox": {
+        "timeout_sec": 10,
+        "max_memory_mb": 256,
+        "max_output_bytes": 65536,
+        "max_processes": 1,
+        "work_root": ".sandbox_runs",
+        "allow_unlimited": False,
+    },
     "harness": {
         "enabled_by_default": False,
         "pass_threshold": 80.0,

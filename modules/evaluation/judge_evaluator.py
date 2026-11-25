@@ -100,7 +100,7 @@ class JudgeEvaluator:
             target_code=clean_code,
             test_code=task.get("test_code", ""),
             timeout_sec=10,
-            allowed_imports=task.get("allowed_imports", ["os", "re", "json"]),
+            allowed_imports=task.get("allowed_imports", ["re", "json"]),
         )
 
         exec_result = self.sandbox.execute(spec)

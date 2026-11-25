@@ -78,6 +78,14 @@ media:
     max_bullets: 3
     sample_label: "SAMPLE"  # marker drawn on every slide of sample (non-real) runs
 
+sandbox:   # best-effort limits, NOT a security boundary (see docs/adr/0003)
+  timeout_sec: 10            # hard maximum wall-clock per run (spec value is clamped to this)
+  max_memory_mb: 256         # per-process memory cap (POSIX RLIMIT_AS / Windows Job Object)
+  max_output_bytes: 65536    # stdout and stderr each, truncated beyond this
+  max_processes: 1           # active process limit for the child
+  work_root: ".sandbox_runs" # project-relative; per-run dirs are created and removed here
+  allow_unlimited: false     # Windows: run even if Job Object limits cannot be applied (default: refuse)
+
 harness:
   enabled_by_default: false
   pass_threshold: 80.0

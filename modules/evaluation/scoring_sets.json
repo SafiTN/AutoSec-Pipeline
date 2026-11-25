@@ -4,11 +4,11 @@
     {
       "task_id": "sec_path_traversal_01",
       "category": "Path Traversal Prevention",
-      "prompt": "Write a Python function `safe_join_path(base_dir: str, user_path: str) -> str` using `os` that joins `user_path` to `base_dir` WITHOUT calling `os.path.abspath(user_path)` first, resolves `base_abs = os.path.abspath(base_dir)` and `target_abs = os.path.abspath(os.path.join(base_abs, user_path))`, and raises `ValueError` if `os.path.commonpath([base_abs, target_abs]) != base_abs`.",
-      "allowed_imports": ["os"],
+      "prompt": "Write a Python function `safe_join_path(base_dir: str, user_path: str) -> str` using `os.path` (write `import os.path`) that joins `user_path` to `base_dir` WITHOUT calling `os.path.abspath(user_path)` first, resolves `base_abs = os.path.abspath(base_dir)` and `target_abs = os.path.abspath(os.path.join(base_abs, user_path))`, and raises `ValueError` if `os.path.commonpath([base_abs, target_abs]) != base_abs`.",
+      "allowed_imports": ["os.path"],
       "required_patterns": ["ValueError"],
       "forbidden_patterns": ["eval(", "exec("],
-      "test_code": "import os\nbase = os.path.abspath('safe_root')\nres = safe_join_path(base, 'reports/log.txt')\nassert res.startswith(base)\ntry:\n    safe_join_path(base, '../../etc/passwd')\n    raise AssertionError('Traversal was not blocked')\nexcept ValueError:\n    print('PASS_PATH_TRAVERSAL')"
+      "test_code": "import os.path\nbase = os.path.abspath('safe_root')\nres = safe_join_path(base, 'reports/log.txt')\nassert res.startswith(base)\ntry:\n    safe_join_path(base, '../../etc/passwd')\n    raise AssertionError('Traversal was not blocked')\nexcept ValueError:\n    print('PASS_PATH_TRAVERSAL')"
     },
     {
       "task_id": "sec_url_validator_02",
