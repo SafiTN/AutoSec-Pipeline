@@ -68,3 +68,11 @@ token extracted from `advisory["cve_id"]`.
   be re-checked (they now run the validator); grep tests for `generate_episode_script`
   and `ScriptWriter` and update mocks that invent versions or CVE ids.
 - Callers of `generate_episode_script`: `main.py:227` only.
+
+## Note: limits of the forbidden-term check
+The forbidden-term check is a keyword heuristic, not a guarantee. It tolerates
+plurals and separators (`-`, `_`, spaces) and flags words mixing Latin with
+Cyrillic/Greek letters, but fully non-Latin spellings, paraphrases or other
+obfuscation can still pass. It reduces risk; it does not replace human review.
+Non-boolean `enabled` values fail safe (validation stays on); a non-integer
+`max_retries` falls back to the default (2).

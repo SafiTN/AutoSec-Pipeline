@@ -552,3 +552,80 @@ def test_cvss_version_then_wrong_score_flagged():
 
 def test_soft_hyphen_evasion():
     assert any(x.startswith("forbidden term") for x in check("pay­load"))
+
+
+# ---------------------------------------------------------------------------
+# Security review fixes (M0, M1, M2, L3, L5)
+# ---------------------------------------------------------------------------
+
+def test_m0_bare_cvss_wrong_score_flagged():
+    assert any("CVSS score 3.5" in x for x in check("CVSS 3.5"))
+
+
+@pytest.mark.parametrize("v", ["2.0", "3.0", "3.1", "4.0"])
+def test_m0_real_cvss_versions_exempt(v):
+    assert check(f"CVSS {v} base score 9.8.") == []
+
+
+@pytest.mark.parametrize("text", [
+    "CVE‑2025‑9999", "CVE–2025–9999", "CVE−2025−9999",
+    "CVE 2025 9999", "cve_2025_9999", "CVE-2025-9999",
+])
+def test_m1_invented_cve_variants_flagged(text):
+    assert any(x.startswith("CVE id") for x in check(text))
+
+
+def test_m1_advisory_own_id_variants_ok():
+    assert check("CVE‑2026‑12345 and CVE 2026 12345") == []
+    adv = dict(ADVISORY, cve_id="CVE-2025-29927-SAMPLE")
+    assert check("CVE‑2025‑29927-SAMPLE", adv) == []
+
+
+@pytest.mark.parametrize("text", [
+    "proof-of-concept", "shell-code", "pay-load", "p a y l o a d", "payloads",
+    "shellcodes", "exploit codes", "weaponized", "weaponization", "pay_load", "Proof of Concept",
+])
+def test_m2_forbidden_term_variants(text):
+    assert any(x.startswith("forbidden term") for x in check(text))
+
+
+def test_m2_homoglyph_mixed_script_flagged():
+    assert check("a рayload here")  # Cyrillic er inside a Latin word
+    assert check("a οbfuscated word")  # Greek omicron inside a Latin word
+
+
+@pytest.mark.parametrize("text", ["a pocket guide", "exploitation of the flaw"])
+def test_m2_no_false_positive(text):
+    assert not any(x.startswith("forbidden term") for x in check(text))
+
+
+def test_m2_long_input_is_fast():
+    import time
+    t = time.time()
+    check("p " * 20000 + "- " * 20000)
+    assert time.time() - t < 5
+
+
+@pytest.mark.parametrize("text", ["rated as critical", "rated at Critical", "Rated: critical"])
+def test_l3_rated_as_at_flagged(text):
+    assert any(x.startswith("severity") for x in check(text))
+
+
+def test_l3_rated_as_matching_level_ok():
+    assert check("rated as high") == []
+
+
+@pytest.mark.parametrize("bad", ["abc", None, [], {}])
+def test_l5_bad_max_retries_falls_back_to_default(bad, caplog):
+    with caplog.at_level(logging.WARNING):
+        writer = ScriptWriter(settings={"script_validation": {"max_retries": bad}})
+    assert writer.max_retries == DEFAULT_SETTINGS["script_validation"]["max_retries"]
+    assert any("max_retries" in r.getMessage() for r in caplog.records)
+
+
+def test_l5_string_false_enabled_fails_safe(caplog):
+    with caplog.at_level(logging.WARNING):
+        writer = ScriptWriter(settings={"script_validation": {"enabled": "false"}})
+    assert writer.validation_enabled is True
+    assert any("ENABLED" in r.getMessage() for r in caplog.records)
+    assert ScriptWriter(settings={"script_validation": {"enabled": False}}).validation_enabled is False

@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from core.agent_runner import AgentRunner
-from core.config_loader import load_settings
+from core.config_loader import DEFAULT_SETTINGS, load_settings
 from core.prompt_optimizer import PromptOptimizer
 from modules.content_pipeline.script_validator import ScriptValidationError, validate_script
 
@@ -23,8 +23,25 @@ class ScriptWriter:
         self.optimizer = PromptOptimizer(settings=self.settings)
         rules = dict(self.settings.get("script_validation", {}) or {})
         self.validation_rules: Dict[str, Any] = rules
-        self.validation_enabled: bool = bool(rules.get("enabled", True))
-        self.max_retries: int = max(0, int(rules.get("max_retries", 0)))
+        self.validation_enabled: bool = self._parse_enabled(rules.get("enabled", True))
+        self.max_retries: int = self._parse_max_retries(rules.get("max_retries", 0))
+
+    @staticmethod
+    def _parse_enabled(value: Any) -> bool:
+        """Fail-safe: only a real boolean False disables; odd values keep checking on."""
+        if isinstance(value, bool):
+            return value
+        logger.warning("script_validation.enabled is not a boolean; keeping fact-check ENABLED")
+        return True
+
+    @staticmethod
+    def _parse_max_retries(value: Any) -> int:
+        try:
+            return max(0, int(value))
+        except (ValueError, TypeError):
+            default = DEFAULT_SETTINGS["script_validation"]["max_retries"]
+            logger.warning("script_validation.max_retries is not an integer; using default %d", default)
+            return default
 
     @staticmethod
     def _extract_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:

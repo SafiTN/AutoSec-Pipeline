@@ -11,15 +11,15 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 SCENE_FIELDS = ("title", "narration", "visual_cue")
 SEVERITY_LEVELS = ("critical", "high", "medium", "low", "none")
 
-_CVE_RE = re.compile(r"cve-\d{4}-\d{4,}")
+_CVE_RE = re.compile(r"cve[\s\-_]{0,3}(\d{4})[\s\-_]{0,3}(\d{4,})")
 _LEVEL = "(" + "|".join(SEVERITY_LEVELS) + ")"
 _SEVERITY_RES = (
     re.compile(rf"(?<!\w){_LEVEL}[\s-]{{0,5}}severity(?!\w)"),
     re.compile(rf"(?<!\w)severity(?:\s{{1,5}}level)?\s{{0,5}}(?:of|is|:)\s{{0,5}}{_LEVEL}(?!\w)"),
-    re.compile(rf"(?<!\w)rated(?:\s{{0,5}}:\s{{0,5}}|\s{{1,5}}){_LEVEL}(?!\w)"),
+    re.compile(rf"(?<!\w)rated(?:\s{{0,5}}:\s{{0,5}}|\s{{1,5}})(?:(?:as|at)\s{{1,5}})?{_LEVEL}(?!\w)"),
 )
 _CVSS_VERSION_RE = re.compile(
-    r"(?<=cvss)(?:\s{0,3}(?:v|version\s)\s{0,2}\d+(?:\.\d+)?|\s{0,3}(?:3\.\d|4\.0)(?![\d.]*\d))"
+    r"(?<=cvss)(?:\s{0,3}(?:v|version\s)\s{0,2}\d+(?:\.\d+)?|\s{0,3}(?:2\.0|3\.0|3\.1|4\.0)(?![\d.]*\d))"
 )
 _CVSS_RE = re.compile(r"cvss[^\d]{0,20}(\d+\.\d+)")
 _VERSION_RE = re.compile(r"(?<![\w.])v?(\d+\.\d+(?:\.\d+)*)(?!\w|\.\d)")
@@ -38,6 +38,7 @@ class ScriptValidationError(ValueError):
 def _normalize(text: Any) -> str:
     value = unicodedata.normalize("NFKC", str(text)).casefold()
     value = "".join(c for c in value if unicodedata.category(c) != "Cf")
+    value = "".join("-" if (unicodedata.category(c) == "Pd" or c == "−") else c for c in value)
     return re.sub(r"\s+", " ", value).strip()
 
 
@@ -54,13 +55,38 @@ def _advisory_text(advisory: Mapping[str, Any]) -> str:
     return _normalize(" ".join(_flatten(p) for p in parts))
 
 
+_SEP = r"[\s\-_]{0,3}"
+_SCRIPTS = ("LATIN", "CYRILLIC", "GREEK")
+
+
 def _term_regex(term: str) -> Optional[Tuple[str, "re.Pattern[str]"]]:
+    """Separator- and plural-tolerant matcher (linear: bounded gaps only)."""
     norm = _normalize(term)
-    if not norm:
+    chars = [c for c in norm if not c.isspace() and c not in "-_"]
+    if not chars:
         return None
-    if norm.endswith("iz"):
-        return norm, re.compile(r"(?<!\w)" + re.escape(norm))
-    return norm, re.compile(r"(?<!\w)" + re.escape(norm) + r"(?!\w)")
+    body = _SEP.join(re.escape(c) for c in chars)
+    if "".join(chars).endswith("iz"):
+        return norm, re.compile(r"(?<!\w)" + body)
+    return norm, re.compile(r"(?<!\w)" + body + r"(?:e?s)?(?!\w)")
+
+
+def _has_mixed_script_word(text: str) -> bool:
+    """True if any word mixes Latin with Cyrillic/Greek letters (homoglyph evasion)."""
+    for word in re.findall(r"\w+", text):
+        seen = set()
+        for c in word:
+            if unicodedata.category(c).startswith("L"):
+                first = unicodedata.name(c, "").split(" ", 1)[0]
+                if first in _SCRIPTS:
+                    seen.add(first)
+        if len(seen) > 1:
+            return True
+    return False
+
+
+def _canon_cves(text: str) -> List[str]:
+    return [f"cve-{y}-{n}" for y, n in _CVE_RE.findall(text)]
 
 
 def _cvss_equal(token: str, score: Any) -> bool:
@@ -74,9 +100,9 @@ def _check_text(text: str, advisory: Mapping[str, Any], adv_text: str, text_rule
                 terms: List[Tuple[str, "re.Pattern[str]"]], out: List[str]) -> None:
     # (a) CVE ids
     adv_cve_norm = _normalize(advisory.get("cve_id", ""))
-    adv_match = _CVE_RE.search(adv_cve_norm)
-    adv_cve = adv_match.group(0) if adv_match else adv_cve_norm
-    for token in _CVE_RE.findall(text):
+    adv_ids = _canon_cves(adv_cve_norm)
+    adv_cve = adv_ids[0] if adv_ids else adv_cve_norm
+    for token in _canon_cves(text):
         if token != adv_cve:
             out.append(f"CVE id {token.upper()} does not match advisory")
 
@@ -106,7 +132,9 @@ def _check_text(text: str, advisory: Mapping[str, Any], adv_text: str, text_rule
             continue
         out.append(f"version {token} not present in advisory data")
 
-    # (e) forbidden terms
+    # (e) forbidden terms (keyword heuristic, not a guarantee)
+    if _has_mixed_script_word(text):
+        out.append("mixed-script word (possible homoglyph evasion)")
     for term, rx in terms:
         if rx.search(text):
             out.append(f"forbidden term: {term}")
