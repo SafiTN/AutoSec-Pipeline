@@ -60,6 +60,22 @@ media:
   resolution:
     width: 1280
     height: 720
+  # Slide styling (T08). Font paths are project-relative; sizes are in pixels
+  # at 1280x720 and are scaled for other resolutions.
+  slide:
+    fonts:
+      regular: "assets/fonts/Inter-Regular.ttf"
+      bold: "assets/fonts/Inter-Bold.ttf"
+      mono: ""  # optional; empty falls back to the regular font
+    sizes:
+      title: 46
+      body: 30
+      header: 22
+      badge: 22
+      takeaway: 28
+    min_font_size: 18
+    margin: 48
+    max_bullets: 3
 
 harness:
   enabled_by_default: false
