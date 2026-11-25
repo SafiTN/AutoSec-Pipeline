@@ -35,6 +35,22 @@ def _first_sentence(text: str) -> str:
     return match.group(1) if match else text
 
 
+def hook_word_count(narration: str) -> int:
+    """Word count of the hook: the first two sentences of a scene narration."""
+    first = _first_sentence(narration)
+    rest = narration.strip()[len(first) :].strip() if narration.strip().startswith(first) else ""
+    second = _first_sentence(rest) if rest else ""
+    return len(first.split()) + len(second.split())
+
+
+def check_hook_length(scenes: List[Dict[str, Any]], max_hook_words: int) -> Optional[int]:
+    """Return the hook word count if scene 1 exceeds `max_hook_words`, else None (soft check)."""
+    if not scenes or not isinstance(scenes[0].get("narration"), str):
+        return None
+    count = hook_word_count(scenes[0]["narration"])
+    return count if count > max_hook_words else None
+
+
 def normalize_scenes(
     raw_scenes: Any,
     max_scenes: int,
@@ -243,6 +259,14 @@ class ScriptWriter:
             parsed_any = True
             violations = self._validate(scenes, advisory)
             if not violations:
+                over = check_hook_length(scenes, self.optimizer.max_hook_words)
+                if over is not None:
+                    logger.warning(
+                        "[ScriptWriter] Hook for %s is %d words (limit %d); keeping script.",
+                        cve_id,
+                        over,
+                        self.optimizer.max_hook_words,
+                    )
                 return scenes
             last_violations = violations
             logger.warning(

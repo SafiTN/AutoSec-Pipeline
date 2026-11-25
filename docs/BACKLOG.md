@@ -96,7 +96,7 @@ Order matters: P0 first. Each item lists acceptance criteria (AC).
   AC: sentences such as "no public exploit code is known" do not cause a hard failure, via a narrow negation exemption in the validator and/or prompt guidance telling the model to avoid the forbidden phrases altogether. Security-reviewer must confirm the exemption cannot be used to smuggle real payload content. Tests for negated and non-negated forms.
 - **T20 Manifest prompt_version** — DONE (2026-11-25, delivered within T09 AC 5) — pipeline-developer (follow-up to T07)
   AC: `prompt_version` returned by `generate_episode_script` is stored in `output/last_episode_manifest.json`; test covers it.
-- **T21 Hook length soft warning** — TODO — pipeline-developer (follow-up to T07, review L1)
+- **T21 Hook length soft warning** — DONE (2026-11-25; hook warning + L4 summary hardening; L5 not triaged, T15 deferred lows (a)/(b) still open) — pipeline-developer (follow-up to T07, review L1)
   AC: scene 1 narration whose first sentences exceed the configured hook word limit logs a warning (no hard failure); test covers it. Also triage T07 review L5 and note L4 (NVD summary prompt injection, pre-existing; consider sanitizing advisory text in `news_fetcher`/prompt).
   T15 deferred lows (security review): (a) item 8 -- review gate uses private `_validation_view`; expose a public helper or document the coupling; (b) item 9 -- add a stale-advisory age warning on `--approve` when the pending file is old.
 - **T07 Prompt v2** — DONE (2026-11-25) — prompt-engineer (+ pipeline-developer for the parser/wiring in script_writer, qa-engineer, security-reviewer mandatory)
